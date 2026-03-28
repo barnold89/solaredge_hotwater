@@ -1,0 +1,44 @@
+{
+    "options": {
+        "step": {
+            "init": {
+                "data": {
+                    "scan_interval": "Polling interval (seconds)"
+                }
+            }
+        }
+    },
+    "config": {
+        "step": {
+            "user": {
+                "data": {
+                    "username": "Username",
+                    "password": "Password",
+                    "site_id": "Site ID"
+                }
+            },
+            "select_device": {
+                "title": "Select Device",
+                "data": {
+                    "device_id": "Device"
+                }
+            },
+            "reauth_confirm": {
+                "title": "Re-authenticate",
+                "data": {
+                    "username": "Username",
+                    "password": "Password"
+                }
+            }
+        },
+        "error": {
+            "invalid_auth": "Username/Password is wrong.",
+            "cannot_connect": "Unable to connect to the server.",
+            "no_devices": "No compatible devices found for this site.",
+            "unknown": "Unknown error occurred."
+        },
+        "abort": {
+            "already_configured": "This entry is already configured."
+        }
+    }
+}
