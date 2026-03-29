@@ -41,6 +41,11 @@ class SolarEdgePowerLevel(SolarEdgeWarmwaterEntity, NumberEntity):
         )
 
     @property
+    def available(self) -> bool:
+        """Only available when in manual mode."""
+        return self.coordinator.data.get("activationMode") == "MANUAL"
+
+    @property
     def native_value(self) -> float | None:
         """Return the current power level."""
         return self.coordinator.data.get("percentageLevel")

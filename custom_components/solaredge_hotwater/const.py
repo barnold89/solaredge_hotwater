@@ -34,7 +34,7 @@ CONF_SITE_ID = "site_id"
 CONF_DEVICE_ID = "device_id"
 CONF_SCAN_INTERVAL = "scan_interval"
 
-MIN_SCAN_INTERVAL = 10
+MIN_SCAN_INTERVAL = 1
 MAX_SCAN_INTERVAL = 3600
 
 # Water heater operation modes

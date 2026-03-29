@@ -66,6 +66,16 @@ SENSOR_DESCRIPTIONS: tuple[SolarEdgeSensorDescription, ...] = (
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn="ratedPower",
     ),
+    SolarEdgeSensorDescription(
+        key="active_power",
+        translation_key="active_power",
+        native_unit_of_measurement=UnitOfPower.WATT,
+        device_class=SensorDeviceClass.POWER,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=0,
+        value_fn="activePowerMeter",
+        nested_key="measurements",
+    ),
 )
 
 

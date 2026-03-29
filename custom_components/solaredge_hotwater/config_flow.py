@@ -7,7 +7,12 @@ from typing import Any
 
 import aiohttp
 import voluptuous as vol
-from homeassistant.config_entries import ConfigEntry, ConfigFlow, ConfigFlowResult, OptionsFlow
+from homeassistant.config_entries import (
+    ConfigEntry,
+    ConfigFlow,
+    ConfigFlowResult,
+    OptionsFlow,
+)
 from homeassistant.const import CONF_PASSWORD, CONF_USERNAME
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
@@ -69,7 +74,7 @@ class SolarEdgeWarmwaterConfigFlow(ConfigFlow, domain=DOMAIN):
                 errors["base"] = "invalid_auth"
             except (aiohttp.ClientError, TimeoutError):
                 errors["base"] = "cannot_connect"
-            except Exception:  # noqa: BLE001
+            except Exception:
                 _LOGGER.exception("Unexpected error during setup")
                 errors["base"] = "unknown"
             else:
@@ -151,7 +156,7 @@ class SolarEdgeWarmwaterConfigFlow(ConfigFlow, domain=DOMAIN):
         """Return the options flow handler."""
         return SolarEdgeWarmwaterOptionsFlow(config_entry)
 
-    async def async_step_reauth(self, entry_data: dict[str, Any]) -> ConfigFlowResult:
+    async def async_step_reauth(self) -> ConfigFlowResult:
         """Handle re-authentication."""
         return await self.async_step_reauth_confirm()
 
@@ -174,12 +179,15 @@ class SolarEdgeWarmwaterConfigFlow(ConfigFlow, domain=DOMAIN):
                 errors["base"] = "invalid_auth"
             except (aiohttp.ClientError, TimeoutError):
                 errors["base"] = "cannot_connect"
-            except Exception:  # noqa: BLE001
+            except Exception:
                 _LOGGER.exception("Unexpected error during re-auth")
                 errors["base"] = "unknown"
             else:
-                entry = self.hass.config_entries.async_get_entry(
-                    self.context["entry_id"]
+                entry_id = self.context.get("entry_id")
+                entry = (
+                    self.hass.config_entries.async_get_entry(entry_id)
+                    if entry_id
+                    else None
                 )
                 if entry:
                     self.hass.config_entries.async_update_entry(
