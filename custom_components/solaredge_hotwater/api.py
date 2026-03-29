@@ -95,6 +95,168 @@ def _pkce_verifier_and_challenge() -> tuple[str, str]:
     return verifier, challenge
 
 
+async def _oauth_get_login_page(
+    session: aiohttp.ClientSession,
+    login_params: dict,
+    timeout: aiohttp.ClientTimeout,
+) -> tuple[str, str]:
+    """GET the login page. Returns (html, final_url). Raises if not on LOGIN_BASE_URL."""
+    login_url = f"{LOGIN_BASE_URL}/login?{urlencode(login_params)}"
+    async with session.get(login_url, timeout=timeout) as resp:
+        _LOGGER.debug("GET login page -> %s", resp.status)
+        html = await resp.text()
+        final_url = str(resp.url)
+    if not final_url.startswith(LOGIN_BASE_URL):
+        raise AuthenticationError(
+            f"Login page redirected to unexpected URL: {final_url}"
+        )
+    return html, final_url
+
+
+async def _oauth_post_credentials(
+    session: aiohttp.ClientSession,
+    login_params: dict,
+    post_body: dict,
+    login_page_url: str,
+    timeout: aiohttp.ClientTimeout,
+) -> str:
+    """POST credentials and follow redirects (including 204 + Location). Returns final URL."""
+    post_url = f"{LOGIN_BASE_URL}/login?{urlencode(login_params)}"
+    post_headers = {
+        "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
+        "Accept": "*/*",
+        "Origin": LOGIN_BASE_URL,
+        "Referer": login_page_url,
+    }
+    async with session.post(
+        post_url,
+        data=post_body,
+        headers=post_headers,
+        timeout=timeout,
+        allow_redirects=True,
+    ) as resp:
+        _LOGGER.debug("POST login -> %s, URL: %s", resp.status, resp.url)
+        final_url = str(resp.url)
+
+        # Handle 204 with Location header (SolarEdge specific)
+        if resp.status == 204 and "Location" in resp.headers:
+            callback_url = resp.headers["Location"]
+            _LOGGER.debug("204 response, following Location: %s", callback_url)
+            async with session.get(
+                callback_url,
+                timeout=timeout,
+                allow_redirects=True,
+            ) as resp2:
+                final_url = str(resp2.url)
+
+    return final_url
+
+
+def _oauth_extract_code(final_url: str) -> str:
+    """Extract authorization code from OAuth callback URL."""
+    if MFE_AUTH_CALLBACK not in final_url:
+        _LOGGER.debug("Did not reach callback (final URL: %s)", final_url)
+        raise AuthenticationError(
+            "OAuth callback not reached - invalid credentials or network error"
+        )
+    parsed = urlparse(final_url)
+    q = parse_qs(parsed.query)
+    code = (q.get("code") or [None])[0]
+    if not code:
+        raise AuthenticationError("OAuth callback URL missing authorization code")
+    return code
+
+
+async def _oauth_exchange_code(
+    code: str,
+    code_verifier: str,
+    timeout: aiohttp.ClientTimeout,
+) -> str:
+    """Exchange authorization code for access token."""
+    token_data = {
+        "grant_type": "authorization_code",
+        "code": code,
+        "client_id": SOLAREDGE_ONE_CLIENT_ID,
+        "redirect_uri": MFE_AUTH_CALLBACK,
+        "code_verifier": code_verifier,
+    }
+    token_headers = {
+        "Content-Type": "application/x-www-form-urlencoded",
+        "Accept": "*/*",
+        "Origin": BASE_URL,
+        "Referer": f"{BASE_URL}/",
+        "User-Agent": USER_AGENT,
+    }
+
+    async with aiohttp.ClientSession() as token_session:
+        async with token_session.post(
+            TOKEN_URL,
+            data=token_data,
+            headers=token_headers,
+            timeout=timeout,
+        ) as resp:
+            _LOGGER.debug("POST oauth2/token -> %s", resp.status)
+            if resp.status != 200:
+                text = await resp.text()
+                raise AuthenticationError(
+                    f"Token exchange failed with status {resp.status}: {text}"
+                )
+            tok = await resp.json()
+
+    access_token = tok.get("access_token")
+    if not access_token:
+        raise AuthenticationError("Token response missing access_token")
+    return access_token
+
+
+async def _perform_oauth_pkce_login(username: str, password: str) -> str:
+    """
+    Perform full OAuth2 PKCE login flow.
+
+    Steps: GET login page → POST credentials → extract code → exchange for token.
+    Returns access_token.
+    """
+    code_verifier, code_challenge = _pkce_verifier_and_challenge()
+    login_params = {
+        "lang": "en",
+        "response_type": "code",
+        "client_id": SOLAREDGE_ONE_CLIENT_ID,
+        "scope": "email openid",
+        "redirect_uri": MFE_AUTH_CALLBACK,
+        "code_challenge_method": "S256",
+        "code_challenge": code_challenge,
+    }
+    timeout = aiohttp.ClientTimeout(total=API_TIMEOUT)
+
+    # Use a dedicated session so cookies from the GET are sent with the POST
+    async with aiohttp.ClientSession(
+        cookie_jar=aiohttp.CookieJar(),
+        headers={"User-Agent": USER_AGENT},
+    ) as login_session:
+        html, login_page_url = await _oauth_get_login_page(
+            login_session, login_params, timeout
+        )
+
+        _, _, form_inputs = _parse_login_form(html)
+        post_body = {
+            k: v
+            for k, v in form_inputs.items()
+            if k not in ("username", "password", "email")
+        }
+        post_body["username"] = username
+        post_body["password"] = password
+
+        final_url = await _oauth_post_credentials(
+            login_session, login_params, post_body, login_page_url, timeout
+        )
+
+    code = _oauth_extract_code(final_url)
+    access_token = await _oauth_exchange_code(code, code_verifier, timeout)
+
+    _LOGGER.debug("OAuth PKCE login successful")
+    return access_token
+
+
 class SolarEdgeWarmwaterAPI:
     """Async API client for SolarEdge hot water controller."""
 
@@ -108,137 +270,10 @@ class SolarEdgeWarmwaterAPI:
 
     async def authenticate(self) -> bool:
         """Perform OAuth2 PKCE login. Returns True on success, raises on failure."""
-        code_verifier, code_challenge = _pkce_verifier_and_challenge()
-
-        login_params = {
-            "lang": "en",
-            "response_type": "code",
-            "client_id": SOLAREDGE_ONE_CLIENT_ID,
-            "scope": "email openid",
-            "redirect_uri": MFE_AUTH_CALLBACK,
-            "code_challenge_method": "S256",
-            "code_challenge": code_challenge,
-        }
-
-        timeout = aiohttp.ClientTimeout(total=API_TIMEOUT)
-        login_url = f"{LOGIN_BASE_URL}/login?{urlencode(login_params)}"
-
-        # Use a single session so cookies from the GET are sent with the POST
-        async with aiohttp.ClientSession(
-            cookie_jar=aiohttp.CookieJar(),
-            headers={"User-Agent": USER_AGENT},
-        ) as login_session:
-            # Step 1: GET login page
-            async with login_session.get(login_url, timeout=timeout) as resp:
-                _LOGGER.debug("GET login page -> %s", resp.status)
-                html = await resp.text()
-                login_page_url = str(resp.url)
-
-            if not login_page_url.startswith(LOGIN_BASE_URL):
-                raise AuthenticationError(
-                    f"Login page redirected to unexpected URL: {login_page_url}"
-                )
-
-            # Step 2: Parse form and prepare credentials
-            _, _, form_inputs = _parse_login_form(html)
-            post_body = {
-                k: v
-                for k, v in form_inputs.items()
-                if k not in ("username", "password", "email")
-            }
-            post_body["username"] = self._username
-            post_body["password"] = self._password
-
-            # Step 3: POST credentials and follow redirects
-            post_url = f"{LOGIN_BASE_URL}/login?{urlencode(login_params)}"
-            post_headers = {
-                "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
-                "Accept": "*/*",
-                "Origin": LOGIN_BASE_URL,
-                "Referer": login_page_url,
-            }
-            async with login_session.post(
-                post_url,
-                data=post_body,
-                headers=post_headers,
-                timeout=timeout,
-                allow_redirects=True,
-            ) as resp:
-                _LOGGER.debug("POST login -> %s, URL: %s", resp.status, resp.url)
-                final_url = str(resp.url)
-
-                # Handle 204 with Location header (SolarEdge specific)
-                if resp.status == 204 and "Location" in resp.headers:
-                    callback_url = resp.headers["Location"]
-                    _LOGGER.debug("204 response, following Location: %s", callback_url)
-                    async with login_session.get(
-                        callback_url,
-                        timeout=timeout,
-                        allow_redirects=True,
-                    ) as resp2:
-                        final_url = str(resp2.url)
-
-        # Step 4: Extract authorization code from callback URL
-        code = self._oauth_extract_code(final_url)
-
-        # Step 5: Exchange code for tokens
-        access_token = await self._oauth_exchange_code(code, code_verifier)
-        self._access_token = access_token
-
-        _LOGGER.debug("OAuth PKCE login successful")
+        self._access_token = await _perform_oauth_pkce_login(
+            self._username, self._password
+        )
         return True
-
-    def _oauth_extract_code(self, final_url: str) -> str:
-        """Extract authorization code from callback URL."""
-        if MFE_AUTH_CALLBACK not in final_url:
-            _LOGGER.debug("Did not reach callback (final URL: %s)", final_url)
-            raise AuthenticationError(
-                "OAuth callback not reached - invalid credentials or network error"
-            )
-        parsed = urlparse(final_url)
-        q = parse_qs(parsed.query)
-        code = (q.get("code") or [None])[0]
-        if not code:
-            raise AuthenticationError("OAuth callback URL missing authorization code")
-        return code
-
-    async def _oauth_exchange_code(self, code: str, code_verifier: str) -> str:
-        """Exchange authorization code for access token."""
-        token_data = {
-            "grant_type": "authorization_code",
-            "code": code,
-            "client_id": SOLAREDGE_ONE_CLIENT_ID,
-            "redirect_uri": MFE_AUTH_CALLBACK,
-            "code_verifier": code_verifier,
-        }
-        token_headers = {
-            "Content-Type": "application/x-www-form-urlencoded",
-            "Accept": "*/*",
-            "Origin": BASE_URL,
-            "Referer": f"{BASE_URL}/",
-            "User-Agent": USER_AGENT,
-        }
-        timeout = aiohttp.ClientTimeout(total=API_TIMEOUT)
-
-        async with aiohttp.ClientSession() as token_session:
-            async with token_session.post(
-                TOKEN_URL,
-                data=token_data,
-                headers=token_headers,
-                timeout=timeout,
-            ) as resp:
-                _LOGGER.debug("POST oauth2/token -> %s", resp.status)
-                if resp.status != 200:
-                    text = await resp.text()
-                    raise AuthenticationError(
-                        f"Token exchange failed with status {resp.status}: {text}"
-                    )
-                tok = await resp.json()
-
-        access_token = tok.get("access_token")
-        if not access_token:
-            raise AuthenticationError("Token response missing access_token")
-        return access_token
 
     def _request_headers(self) -> dict[str, str]:
         """Build headers for authenticated API requests."""
