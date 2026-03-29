@@ -19,6 +19,10 @@ from .const import (
     DEVICE_STATE_PATH,
     DEVICES_LIST_INFO_PATH,
     DEVICES_LIST_STATE_PATH,
+    HTTP_STATUS_BAD_REQUEST,
+    HTTP_STATUS_NO_CONTENT,
+    HTTP_STATUS_OK,
+    HTTP_STATUS_UNAUTHORIZED,
     LOGIN_BASE_URL,
     MFE_AUTH_CALLBACK_PATH,
     SOLAREDGE_ONE_CLIENT_ID,
@@ -66,7 +70,7 @@ class _FormParser(HTMLParser):
         if self._in_form and tag == "input":
             name = attrs_d.get("name")
             if name:
-                self.inputs[name] = attrs_d.get("value", "")
+                self.inputs[name] = attrs_d.get("value") or ""
 
     def handle_endtag(self, tag: str) -> None:
         if tag == "form" and self._in_form:
@@ -100,16 +104,19 @@ async def _oauth_get_login_page(
     login_params: dict,
     timeout: aiohttp.ClientTimeout,
 ) -> tuple[str, str]:
-    """GET the login page. Returns (html, final_url). Raises if not on LOGIN_BASE_URL."""
+    """
+    GET the login page. Returns (html, final_url).
+
+    Raises if not on LOGIN_BASE_URL.
+    """
     login_url = f"{LOGIN_BASE_URL}/login?{urlencode(login_params)}"
     async with session.get(login_url, timeout=timeout) as resp:
         _LOGGER.debug("GET login page -> %s", resp.status)
         html = await resp.text()
         final_url = str(resp.url)
     if not final_url.startswith(LOGIN_BASE_URL):
-        raise AuthenticationError(
-            f"Login page redirected to unexpected URL: {final_url}"
-        )
+        msg = f"Login page redirected to unexpected URL: {final_url}"
+        raise AuthenticationError(msg)
     return html, final_url
 
 
@@ -120,7 +127,7 @@ async def _oauth_post_credentials(
     login_page_url: str,
     timeout: aiohttp.ClientTimeout,
 ) -> str:
-    """POST credentials and follow redirects (including 204 + Location). Returns final URL."""
+    """POST credentials and follow redirects (including 204 + Location). Returns final URL."""  # noqa: E501
     post_url = f"{LOGIN_BASE_URL}/login?{urlencode(login_params)}"
     post_headers = {
         "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
@@ -139,7 +146,7 @@ async def _oauth_post_credentials(
         final_url = str(resp.url)
 
         # Handle 204 with Location header (SolarEdge specific)
-        if resp.status == 204 and "Location" in resp.headers:
+        if resp.status == HTTP_STATUS_NO_CONTENT and "Location" in resp.headers:
             callback_url = resp.headers["Location"]
             _LOGGER.debug("204 response, following Location: %s", callback_url)
             async with session.get(
@@ -156,14 +163,14 @@ def _oauth_extract_code(final_url: str) -> str:
     """Extract authorization code from OAuth callback URL."""
     if MFE_AUTH_CALLBACK not in final_url:
         _LOGGER.debug("Did not reach callback (final URL: %s)", final_url)
-        raise AuthenticationError(
-            "OAuth callback not reached - invalid credentials or network error"
-        )
+        msg = "OAuth callback not reached - invalid credentials or network error"
+        raise AuthenticationError(msg)
     parsed = urlparse(final_url)
     q = parse_qs(parsed.query)
     code = (q.get("code") or [None])[0]
     if not code:
-        raise AuthenticationError("OAuth callback URL missing authorization code")
+        msg = "OAuth callback URL missing authorization code"
+        raise AuthenticationError(msg)
     return code
 
 
@@ -188,24 +195,26 @@ async def _oauth_exchange_code(
         "User-Agent": USER_AGENT,
     }
 
-    async with aiohttp.ClientSession() as token_session:
-        async with token_session.post(
+    async with (
+        aiohttp.ClientSession() as token_session,
+        token_session.post(
             TOKEN_URL,
             data=token_data,
             headers=token_headers,
             timeout=timeout,
-        ) as resp:
+        ) as resp,
+    ):
             _LOGGER.debug("POST oauth2/token -> %s", resp.status)
-            if resp.status != 200:
+            if resp.status != HTTP_STATUS_OK:
                 text = await resp.text()
-                raise AuthenticationError(
-                    f"Token exchange failed with status {resp.status}: {text}"
-                )
+                msg = f"Token exchange failed with status {resp.status}: {text}"
+                raise AuthenticationError(msg)
             tok = await resp.json()
 
     access_token = tok.get("access_token")
     if not access_token:
-        raise AuthenticationError("Token response missing access_token")
+        msg = "Token response missing access_token"
+        raise AuthenticationError(msg)
     return access_token
 
 
@@ -263,6 +272,7 @@ class SolarEdgeWarmwaterAPI:
     def __init__(
         self, username: str, password: str, session: aiohttp.ClientSession
     ) -> None:
+        """Initialize the API client with credentials and an aiohttp session."""
         self._username = username
         self._password = password
         self._session = session
@@ -278,7 +288,8 @@ class SolarEdgeWarmwaterAPI:
     def _request_headers(self) -> dict[str, str]:
         """Build headers for authenticated API requests."""
         if not self._access_token:
-            raise AuthenticationError("Not authenticated")
+            msg = "Not authenticated"
+            raise AuthenticationError(msg)
         return {
             "Accept": "application/json",
             "Content-Type": "application/json",
@@ -293,6 +304,7 @@ class SolarEdgeWarmwaterAPI:
         method: str,
         path: str,
         json_data: dict | None = None,
+        *,
         retry_auth: bool = True,
     ) -> dict:
         """Make an authenticated API request with automatic re-auth on 401."""
@@ -314,21 +326,21 @@ class SolarEdgeWarmwaterAPI:
         async with self._session.request(method, url, **kwargs) as resp:
             _LOGGER.debug("%s %s -> %s", method, path, resp.status)
 
-            if resp.status == 401 and retry_auth:
+            if resp.status == HTTP_STATUS_UNAUTHORIZED and retry_auth:
                 _LOGGER.debug("401 on %s %s, re-authenticating", method, path)
                 self._access_token = None
                 await self.authenticate()
                 return await self._request(method, path, json_data, retry_auth=False)
 
-            if resp.status == 401:
+            if resp.status == HTTP_STATUS_UNAUTHORIZED:
                 self._access_token = None
-                raise AuthenticationError(f"Authentication failed for {method} {path}")
+                msg = f"Authentication failed for {method} {path}"
+                raise AuthenticationError(msg)
 
-            if resp.status >= 400:
+            if resp.status >= HTTP_STATUS_BAD_REQUEST:
                 text = await resp.text()
-                raise ApiError(
-                    f"API request failed: {method} {path} -> {resp.status}: {text}"
-                )
+                msg = f"API request failed: {method} {path} -> {resp.status}: {text}"
+                raise ApiError(msg)
 
             return await resp.json()
 

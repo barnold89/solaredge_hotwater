@@ -3,20 +3,23 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING
 
 from homeassistant.components.binary_sensor import (
     BinarySensorDeviceClass,
     BinarySensorEntity,
     BinarySensorEntityDescription,
 )
-from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity import EntityCategory
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.const import EntityCategory
 
-from . import SolarEdgeWarmwaterConfigEntry
-from .coordinator import SolarEdgeWarmwaterCoordinator
 from .entity import SolarEdgeWarmwaterEntity
+
+if TYPE_CHECKING:
+    from homeassistant.core import HomeAssistant
+    from homeassistant.helpers.entity_platform import AddEntitiesCallback
+
+    from . import SolarEdgeWarmwaterConfigEntry
+    from .coordinator import SolarEdgeWarmwaterCoordinator
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -47,7 +50,7 @@ BINARY_SENSOR_DESCRIPTIONS: tuple[SolarEdgeBinarySensorDescription, ...] = (
 
 
 async def async_setup_entry(
-    hass: HomeAssistant,
+    _hass: HomeAssistant,
     entry: SolarEdgeWarmwaterConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:

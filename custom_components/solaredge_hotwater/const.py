@@ -23,6 +23,12 @@ DEVICE_ACTIVATION_PATH = (
     "/services/m/api/homeautomation/v1.0/{site_id}/devices/{device_id}/activationState"
 )
 
+# HTTP status codes
+HTTP_STATUS_OK = 200
+HTTP_STATUS_NO_CONTENT = 204
+HTTP_STATUS_UNAUTHORIZED = 401
+HTTP_STATUS_BAD_REQUEST = 400
+
 # Timeouts
 API_TIMEOUT = 30
 
