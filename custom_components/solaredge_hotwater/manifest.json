@@ -1,0 +1,12 @@
+{
+  "domain": "solaredge_hotwater",
+  "name": "SolarEdge Hot Water Controller",
+  "codeowners": [
+    "@barnold89"
+  ],
+  "config_flow": true,
+  "documentation": "https://github.com/barnold89/solaredge-hotwater",
+  "iot_class": "cloud_polling",
+  "issue_tracker": "https://github.com/barnold89/solaredge-hotwater/issues",
+  "version": "0.1.0"
+}
