@@ -54,7 +54,7 @@ After setup, you can adjust the polling interval via the integration's **Configu
 
 | Entity | Type | Description |
 |---|---|---|
-| Hot Water Heater | `water_heater` | Control operation mode (auto / on / off) |
+| Operation Mode | `select` | Control operation mode (auto / on / off) |
 | Power Level | `number` | Set heater power (0–100%, only in manual mode) |
 | Water Temperature | `sensor` | Current measured water temperature (°C) |
 | Active Power | `sensor` | Current power consumption (W) |

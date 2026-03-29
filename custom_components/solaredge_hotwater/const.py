@@ -43,7 +43,7 @@ CONF_SCAN_INTERVAL = "scan_interval"
 MIN_SCAN_INTERVAL = 1
 MAX_SCAN_INTERVAL = 3600
 
-# Water heater operation modes
+# Operation modes
 MODE_AUTO = "auto"
 MODE_ON = "on"
 MODE_OFF = "off"
@@ -51,8 +51,8 @@ OPERATION_MODES = [MODE_AUTO, MODE_ON, MODE_OFF]
 
 # Platforms
 PLATFORMS = [
-    Platform.WATER_HEATER,
     Platform.NUMBER,
+    Platform.SELECT,
     Platform.SENSOR,
     Platform.BINARY_SENSOR,
 ]

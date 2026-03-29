@@ -1,12 +1,8 @@
-"""Water heater platform for SolarEdge Warmwater integration."""
+"""Select platform for SolarEdge Warmwater integration."""
 
 from __future__ import annotations
 
-from homeassistant.components.water_heater import (
-    WaterHeaterEntity,
-    WaterHeaterEntityFeature,
-)
-from homeassistant.const import UnitOfTemperature
+from homeassistant.components.select import SelectEntity
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
@@ -21,34 +17,27 @@ async def async_setup_entry(
     entry: SolarEdgeWarmwaterConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up the water heater platform."""
+    """Set up the select platform."""
     coordinator = entry.runtime_data
-    async_add_entities([SolarEdgeWaterHeater(coordinator)])
+    async_add_entities([SolarEdgeOperationMode(coordinator)])
 
 
-class SolarEdgeWaterHeater(SolarEdgeWarmwaterEntity, WaterHeaterEntity):
-    """SolarEdge hot water heater entity."""
+class SolarEdgeOperationMode(SolarEdgeWarmwaterEntity, SelectEntity):
+    """Select entity for controlling the heater operation mode."""
 
-    _attr_supported_features = (
-        WaterHeaterEntityFeature.OPERATION_MODE | WaterHeaterEntityFeature.ON_OFF
-    )
-    _attr_temperature_unit = UnitOfTemperature.CELSIUS
-    _attr_operation_list = OPERATION_MODES
-    _attr_translation_key = "heater"
+    _attr_options = OPERATION_MODES
+    _attr_translation_key = "operation_mode"
+    _attr_icon = "mdi:water-boiler"
 
     def __init__(self, coordinator: SolarEdgeWarmwaterCoordinator) -> None:
-        """Initialize the water heater."""
+        """Initialize the operation mode entity."""
         super().__init__(coordinator)
-        self._attr_unique_id = f"{coordinator.site_id}_{coordinator.device_id}_heater"
+        self._attr_unique_id = (
+            f"{coordinator.site_id}_{coordinator.device_id}_operation_mode"
+        )
 
     @property
-    def current_temperature(self) -> float | None:
-        """Return the current water temperature."""
-        measurements = self.coordinator.data.get("measurements", {})
-        return measurements.get("measuredTemperature")
-
-    @property
-    def current_operation(self) -> str:
+    def current_option(self) -> str | None:
         """Return the current operation mode."""
         mode = self.coordinator.data.get("activationMode", "")
         level = self.coordinator.data.get("percentageLevel", 0)
@@ -58,21 +47,15 @@ class SolarEdgeWaterHeater(SolarEdgeWarmwaterEntity, WaterHeaterEntity):
             return MODE_ON
         return MODE_OFF
 
-    @property
-    def is_on(self) -> bool:
-        """Return True if the heater is on."""
-        return self.current_operation != MODE_OFF
-
-    async def async_set_operation_mode(self, operation_mode: str) -> None:
+    async def async_select_option(self, option: str) -> None:
         """Set the operation mode."""
-        if operation_mode == MODE_AUTO:
+        if option == MODE_AUTO:
             await self.coordinator.api.set_activation_state(
                 self.coordinator.site_id,
                 self.coordinator.device_id,
                 "AUTO",
             )
-        elif operation_mode == MODE_ON:
-            # Use the current power level, or default to 100%
+        elif option == MODE_ON:
             level = self.coordinator.data.get("percentageLevel", 100) or 100
             await self.coordinator.api.set_activation_state(
                 self.coordinator.site_id,
@@ -80,7 +63,7 @@ class SolarEdgeWaterHeater(SolarEdgeWarmwaterEntity, WaterHeaterEntity):
                 "MANUAL",
                 level=level,
             )
-        elif operation_mode == MODE_OFF:
+        elif option == MODE_OFF:
             await self.coordinator.api.set_activation_state(
                 self.coordinator.site_id,
                 self.coordinator.device_id,
@@ -88,11 +71,3 @@ class SolarEdgeWaterHeater(SolarEdgeWarmwaterEntity, WaterHeaterEntity):
                 level=0,
             )
         await self.coordinator.async_request_refresh()
-
-    async def async_turn_on(self, **kwargs) -> None:
-        """Turn the heater on."""
-        await self.async_set_operation_mode(MODE_ON)
-
-    async def async_turn_off(self, **kwargs) -> None:
-        """Turn the heater off."""
-        await self.async_set_operation_mode(MODE_OFF)

@@ -47,9 +47,14 @@
                 "name": "Leistungsstufe"
             }
         },
-        "water_heater": {
-            "heater": {
-                "name": "Heizstab"
+        "select": {
+            "operation_mode": {
+                "name": "Betriebsmodus",
+                "state": {
+                    "auto": "Automatisch",
+                    "on": "Ein",
+                    "off": "Aus"
+                }
             }
         }
     },
