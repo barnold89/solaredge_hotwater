@@ -72,7 +72,7 @@ class SolarEdgeWarmwaterConfigFlow(ConfigFlow, domain=DOMAIN):
                 devices_data = await api.get_devices_info(self._site_id)
             except AuthenticationError:
                 errors["base"] = "invalid_auth"
-            except (aiohttp.ClientError, TimeoutError):
+            except aiohttp.ClientError, TimeoutError:
                 errors["base"] = "cannot_connect"
             except Exception:
                 _LOGGER.exception("Unexpected error during setup")
@@ -177,7 +177,7 @@ class SolarEdgeWarmwaterConfigFlow(ConfigFlow, domain=DOMAIN):
                 await api.authenticate()
             except AuthenticationError:
                 errors["base"] = "invalid_auth"
-            except (aiohttp.ClientError, TimeoutError):
+            except aiohttp.ClientError, TimeoutError:
                 errors["base"] = "cannot_connect"
             except Exception:
                 _LOGGER.exception("Unexpected error during re-auth")

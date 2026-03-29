@@ -204,12 +204,12 @@ async def _oauth_exchange_code(
             timeout=timeout,
         ) as resp,
     ):
-            _LOGGER.debug("POST oauth2/token -> %s", resp.status)
-            if resp.status != HTTP_STATUS_OK:
-                text = await resp.text()
-                msg = f"Token exchange failed with status {resp.status}: {text}"
-                raise AuthenticationError(msg)
-            tok = await resp.json()
+        _LOGGER.debug("POST oauth2/token -> %s", resp.status)
+        if resp.status != HTTP_STATUS_OK:
+            text = await resp.text()
+            msg = f"Token exchange failed with status {resp.status}: {text}"
+            raise AuthenticationError(msg)
+        tok = await resp.json()
 
     access_token = tok.get("access_token")
     if not access_token:
