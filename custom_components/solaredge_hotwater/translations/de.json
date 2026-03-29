@@ -1,0 +1,95 @@
+{
+    "options": {
+        "step": {
+            "init": {
+                "title": "Optionen",
+                "description": "Lege fest, wie oft die Integration die SolarEdge-API nach aktuellen Daten abfragt.",
+                "data": {
+                    "scan_interval": "Abfrageintervall (Sekunden)"
+                },
+                "data_description": {
+                    "scan_interval": "Wie häufig (in Sekunden) der aktuelle Gerätestatus von der SolarEdge-API abgerufen wird."
+                }
+            }
+        }
+    },
+    "entity": {
+        "sensor": {
+            "temperature": {
+                "name": "Wassertemperatur"
+            },
+            "device_status": {
+                "name": "Gerätestatus"
+            },
+            "auto_off_reason": {
+                "name": "Abschaltursache"
+            },
+            "schedule_type": {
+                "name": "Zeitplantyp"
+            },
+            "rated_power": {
+                "name": "Nennleistung"
+            },
+            "active_power": {
+                "name": "Aktive Leistung"
+            }
+        },
+        "binary_sensor": {
+            "communication_status": {
+                "name": "Kommunikationsstatus"
+            },
+            "excess_pv_enabled": {
+                "name": "Überschuss-PV aktiviert"
+            }
+        },
+        "number": {
+            "power_level": {
+                "name": "Leistungsstufe"
+            }
+        },
+        "select": {
+            "operation_mode": {
+                "name": "Betriebsmodus",
+                "state": {
+                    "auto": "Automatisch",
+                    "on": "Ein",
+                    "off": "Aus"
+                }
+            }
+        }
+    },
+    "config": {
+        "step": {
+            "user": {
+                "data": {
+                    "username": "Benutzername",
+                    "password": "Passwort",
+                    "site_id": "Standort-ID"
+                }
+            },
+            "select_device": {
+                "title": "Gerät auswählen",
+                "data": {
+                    "device_id": "Gerät"
+                }
+            },
+            "reauth_confirm": {
+                "title": "Erneut authentifizieren",
+                "data": {
+                    "username": "Benutzername",
+                    "password": "Passwort"
+                }
+            }
+        },
+        "error": {
+            "invalid_auth": "Benutzername oder Passwort ist falsch.",
+            "cannot_connect": "Verbindung zum Server nicht möglich.",
+            "no_devices": "Keine kompatiblen Geräte für diesen Standort gefunden.",
+            "unknown": "Ein unbekannter Fehler ist aufgetreten."
+        },
+        "abort": {
+            "already_configured": "Dieser Eintrag ist bereits konfiguriert.",
+            "reauth_successful": "Erneute Authentifizierung erfolgreich."
+        }
+    }
+}

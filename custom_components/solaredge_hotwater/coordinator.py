@@ -2,14 +2,16 @@
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from datetime import timedelta
+from typing import TYPE_CHECKING
 
 import aiohttp
-from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
+
+if TYPE_CHECKING:
+    from homeassistant.core import HomeAssistant
 
 from .api import AuthenticationError, SolarEdgeWarmwaterAPI
 from .const import DEFAULT_SCAN_INTERVAL, DOMAIN
@@ -56,8 +58,9 @@ class SolarEdgeWarmwaterCoordinator(DataUpdateCoordinator[dict]):
             state = await self.api.get_device_state(self.site_id, self.device_id)
         except AuthenticationError as err:
             raise ConfigEntryAuthFailed from err
-        except (aiohttp.ClientError, asyncio.TimeoutError) as err:
-            raise UpdateFailed(f"Error communicating with API: {err}") from err
+        except (aiohttp.ClientError, TimeoutError) as err:
+            msg = f"Error communicating with API: {err}"
+            raise UpdateFailed(msg) from err
 
         # Merge device config info into state for sensors that need it
         if self.device_info_data:

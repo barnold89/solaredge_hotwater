@@ -2,8 +2,40 @@
     "options": {
         "step": {
             "init": {
+                "title": "Options",
+                "description": "Adjust how often the integration polls the SolarEdge API for updates.",
                 "data": {
                     "scan_interval": "Polling interval (seconds)"
+                },
+                "data_description": {
+                    "scan_interval": "How frequently (in seconds) the integration fetches the current device state from the SolarEdge API."
+                }
+            }
+        }
+    },
+    "entity": {
+        "sensor": {
+            "temperature": { "name": "Water Temperature" },
+            "device_status": { "name": "Device Status" },
+            "auto_off_reason": { "name": "Auto Off Reason" },
+            "schedule_type": { "name": "Schedule Type" },
+            "rated_power": { "name": "Rated Power" },
+            "active_power": { "name": "Active Power" }
+        },
+        "binary_sensor": {
+            "communication_status": { "name": "Communication Status" },
+            "excess_pv_enabled": { "name": "Excess PV Enabled" }
+        },
+        "number": {
+            "power_level": { "name": "Power Level" }
+        },
+        "select": {
+            "operation_mode": {
+                "name": "Operation Mode",
+                "state": {
+                    "auto": "Auto",
+                    "on": "On",
+                    "off": "Off"
                 }
             }
         }

@@ -2,18 +2,23 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from homeassistant.components.number import NumberEntity, NumberMode
 from homeassistant.const import PERCENTAGE
-from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from . import SolarEdgeWarmwaterConfigEntry
-from .coordinator import SolarEdgeWarmwaterCoordinator
 from .entity import SolarEdgeWarmwaterEntity
+
+if TYPE_CHECKING:
+    from homeassistant.core import HomeAssistant
+    from homeassistant.helpers.entity_platform import AddEntitiesCallback
+
+    from . import SolarEdgeWarmwaterConfigEntry
+    from .coordinator import SolarEdgeWarmwaterCoordinator
 
 
 async def async_setup_entry(
-    hass: HomeAssistant,
+    _hass: HomeAssistant,
     entry: SolarEdgeWarmwaterConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
@@ -39,6 +44,11 @@ class SolarEdgePowerLevel(SolarEdgeWarmwaterEntity, NumberEntity):
         self._attr_unique_id = (
             f"{coordinator.site_id}_{coordinator.device_id}_power_level"
         )
+
+    @property
+    def available(self) -> bool:
+        """Only available when in manual mode."""
+        return self.coordinator.data.get("activationMode") == "MANUAL"
 
     @property
     def native_value(self) -> float | None:
