@@ -22,7 +22,7 @@
                 "name": "Gerätestatus"
             },
             "auto_off_reason": {
-                "name": "Grund für automatische Abschaltung"
+                "name": "Abschaltursache"
             },
             "schedule_type": {
                 "name": "Zeitplantyp"
