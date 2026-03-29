@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from homeassistant.components.sensor import (
     SensorDeviceClass,
@@ -11,14 +11,16 @@ from homeassistant.components.sensor import (
     SensorEntityDescription,
     SensorStateClass,
 )
-from homeassistant.const import UnitOfPower, UnitOfTemperature
-from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity import EntityCategory
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.const import EntityCategory, UnitOfPower, UnitOfTemperature
 
-from . import SolarEdgeWarmwaterConfigEntry
-from .coordinator import SolarEdgeWarmwaterCoordinator
 from .entity import SolarEdgeWarmwaterEntity
+
+if TYPE_CHECKING:
+    from homeassistant.core import HomeAssistant
+    from homeassistant.helpers.entity_platform import AddEntitiesCallback
+
+    from . import SolarEdgeWarmwaterConfigEntry
+    from .coordinator import SolarEdgeWarmwaterCoordinator
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -80,7 +82,7 @@ SENSOR_DESCRIPTIONS: tuple[SolarEdgeSensorDescription, ...] = (
 
 
 async def async_setup_entry(
-    hass: HomeAssistant,
+    _hass: HomeAssistant,
     entry: SolarEdgeWarmwaterConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:

@@ -2,18 +2,23 @@
 
 from __future__ import annotations
 
-from homeassistant.components.select import SelectEntity
-from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from typing import TYPE_CHECKING
 
-from . import SolarEdgeWarmwaterConfigEntry
+from homeassistant.components.select import SelectEntity
+
 from .const import MODE_AUTO, MODE_OFF, MODE_ON, OPERATION_MODES
-from .coordinator import SolarEdgeWarmwaterCoordinator
 from .entity import SolarEdgeWarmwaterEntity
+
+if TYPE_CHECKING:
+    from homeassistant.core import HomeAssistant
+    from homeassistant.helpers.entity_platform import AddEntitiesCallback
+
+    from . import SolarEdgeWarmwaterConfigEntry
+    from .coordinator import SolarEdgeWarmwaterCoordinator
 
 
 async def async_setup_entry(
-    hass: HomeAssistant,
+    _hass: HomeAssistant,
     entry: SolarEdgeWarmwaterConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:

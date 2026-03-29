@@ -11,7 +11,7 @@ LOGIN_BASE_URL = "https://login.solaredge.com"
 SOLAREDGE_ONE_CLIENT_ID = "ugfnsujd3384sshcjehaphlh3"
 MFE_AUTH_PATH = "/mfe/auth/"
 MFE_AUTH_CALLBACK_PATH = "/mfe/auth/callback"
-TOKEN_PATH = "/oauth2/token"
+TOKEN_PATH = "/oauth2/token"  # noqa: S105
 
 # API
 BASE_URL = "https://monitoring.solaredge.com"
