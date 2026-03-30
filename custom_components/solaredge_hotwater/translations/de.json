@@ -25,18 +25,18 @@
                 "name": "Abschaltursache"
             },
             "schedule_type": {
-                "name": "Zeitplantyp"
+                "name": "Zeitplanmodus"
             },
             "rated_power": {
                 "name": "Nennleistung"
             },
             "active_power": {
-                "name": "Aktive Leistung"
+                "name": "Aktuelle Leistung"
             }
         },
         "binary_sensor": {
             "communication_status": {
-                "name": "Kommunikationsstatus"
+                "name": "Verbindungsstatus"
             },
             "excess_pv_enabled": {
                 "name": "Überschuss-PV aktiviert"
@@ -74,7 +74,7 @@
                 }
             },
             "reauth_confirm": {
-                "title": "Erneut authentifizieren",
+                "title": "Neu anmelden",
                 "data": {
                     "username": "Benutzername",
                     "password": "Passwort"
@@ -88,7 +88,7 @@
             "unknown": "Ein unbekannter Fehler ist aufgetreten."
         },
         "abort": {
-            "already_configured": "Dieser Eintrag ist bereits konfiguriert.",
+            "already_configured": "Diese Integration ist bereits eingerichtet.",
             "reauth_successful": "Erneute Authentifizierung erfolgreich."
         }
     }

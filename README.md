@@ -21,9 +21,11 @@ A custom Home Assistant integration for controlling and monitoring SolarEdge hot
 
 ### HACS (recommended)
 
+[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=barnold89&repository=solaredge_hotwater&category=integration)
+
 1. Open HACS in your Home Assistant instance.
 2. Go to **Integrations** → click the three-dot menu → **Custom repositories**.
-3. Add `https://github.com/barnold89/solaredge-hotwater` as an **Integration**.
+3. Add `https://github.com/barnold89/solaredge_hotwater` as an **Integration**.
 4. Search for **SolarEdge Hot Water Controller** and install it.
 5. Restart Home Assistant.
 
@@ -75,7 +77,7 @@ https://monitoring.solaredge.com/solaredge-web/p/site/<SITE_ID>/dashboard
 
 ## Contributing
 
-Pull requests and issue reports are welcome at [github.com/barnold89/solaredge-hotwater](https://github.com/barnold89/solaredge-hotwater).
+Pull requests and issue reports are welcome at [github.com/barnold89/solaredge-hotwater](https://github.com/barnold89/solaredge_hotwater).
 
 ## License
 

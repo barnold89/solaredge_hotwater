@@ -5,8 +5,8 @@
     "@barnold89"
   ],
   "config_flow": true,
-  "documentation": "https://github.com/barnold89/solaredge-hotwater",
+  "documentation": "https://github.com/barnold89/solaredge_hotwater",
   "iot_class": "cloud_polling",
-  "issue_tracker": "https://github.com/barnold89/solaredge-hotwater/issues",
+  "issue_tracker": "https://github.com/barnold89/solaredge_hotwater/issues",
   "version": "0.1.0"
 }
