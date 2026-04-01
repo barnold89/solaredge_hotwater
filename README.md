@@ -6,7 +6,7 @@ A custom Home Assistant integration for controlling and monitoring SolarEdge hot
 
 - Monitor water temperature and active power consumption
 - Control the heater operation mode (Auto / On / Off)
-- Adjust power level via a slider (0–100%)
+- Monitor the current power level (0–100%)
 - View device status, schedule type, and auto-off reason
 - Monitor PV surplus usage and communication status
 - Configurable polling interval
@@ -57,9 +57,9 @@ After setup, you can adjust the polling interval via the integration's **Configu
 | Entity | Type | Description |
 |---|---|---|
 | Operation Mode | `select` | Control operation mode (auto / on / off) |
-| Power Level | `number` | Set heater power (0–100%, only in manual mode) |
 | Water Temperature | `sensor` | Current measured water temperature (°C) |
 | Active Power | `sensor` | Current power consumption (W) |
+| Power Level | `sensor` | Current power level (%) |
 | Rated Power | `sensor` | Device rated power (W) |
 | Device Status | `sensor` | Current device status string |
 | Schedule Type | `sensor` | Active schedule type |
