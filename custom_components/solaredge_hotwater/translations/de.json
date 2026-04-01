@@ -32,6 +32,9 @@
             },
             "active_power": {
                 "name": "Aktuelle Leistung"
+            },
+            "power_level": {
+                "name": "Leistungsstufe"
             }
         },
         "binary_sensor": {
@@ -40,11 +43,6 @@
             },
             "excess_pv_enabled": {
                 "name": "Überschuss-PV aktiviert"
-            }
-        },
-        "number": {
-            "power_level": {
-                "name": "Leistungsstufe"
             }
         },
         "select": {
