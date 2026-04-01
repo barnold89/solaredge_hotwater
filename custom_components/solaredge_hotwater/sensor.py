@@ -11,7 +11,12 @@ from homeassistant.components.sensor import (
     SensorEntityDescription,
     SensorStateClass,
 )
-from homeassistant.const import EntityCategory, UnitOfPower, UnitOfTemperature
+from homeassistant.const import (
+    PERCENTAGE,
+    EntityCategory,
+    UnitOfPower,
+    UnitOfTemperature,
+)
 
 from .entity import SolarEdgeWarmwaterEntity
 
@@ -77,6 +82,14 @@ SENSOR_DESCRIPTIONS: tuple[SolarEdgeSensorDescription, ...] = (
         suggested_display_precision=0,
         value_fn="activePowerMeter",
         nested_key="measurements",
+    ),
+    SolarEdgeSensorDescription(
+        key="power_level",
+        translation_key="power_level",
+        native_unit_of_measurement=PERCENTAGE,
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:flash",
+        value_fn="percentageLevel",
     ),
 )
 

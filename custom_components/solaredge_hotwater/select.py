@@ -61,12 +61,11 @@ class SolarEdgeOperationMode(SolarEdgeWarmwaterEntity, SelectEntity):
                 "AUTO",
             )
         elif option == MODE_ON:
-            level = self.coordinator.data.get("percentageLevel", 100) or 100
             await self.coordinator.api.set_activation_state(
                 self.coordinator.site_id,
                 self.coordinator.device_id,
                 "MANUAL",
-                level=level,
+                level=100,
             )
         elif option == MODE_OFF:
             await self.coordinator.api.set_activation_state(

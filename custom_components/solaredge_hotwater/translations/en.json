@@ -20,14 +20,12 @@
             "auto_off_reason": { "name": "Auto Off Reason" },
             "schedule_type": { "name": "Schedule Type" },
             "rated_power": { "name": "Rated Power" },
-            "active_power": { "name": "Active Power" }
+            "active_power": { "name": "Active Power" },
+            "power_level": { "name": "Power Level" }
         },
         "binary_sensor": {
             "communication_status": { "name": "Communication Status" },
             "excess_pv_enabled": { "name": "Excess PV Enabled" }
-        },
-        "number": {
-            "power_level": { "name": "Power Level" }
         },
         "select": {
             "operation_mode": {

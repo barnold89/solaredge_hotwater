@@ -51,7 +51,6 @@ OPERATION_MODES = [MODE_AUTO, MODE_ON, MODE_OFF]
 
 # Platforms
 PLATFORMS = [
-    Platform.NUMBER,
     Platform.SELECT,
     Platform.SENSOR,
     Platform.BINARY_SENSOR,
