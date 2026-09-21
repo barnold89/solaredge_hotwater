@@ -64,7 +64,7 @@ class SolarEdgeWarmwaterCoordinator(DataUpdateCoordinator[dict]):
 
         # Merge device config info into state for sensors that need it
         if self.device_info_data:
-            configs = self.device_info_data.get("deviceConfigurations", {})
+            configs = self.device_info_data.get("deviceConfigurations") or {}
             state["ratedPower"] = configs.get("ratedPower")
             state["excessPVEnabled"] = configs.get("excessPVEnabled")
 
