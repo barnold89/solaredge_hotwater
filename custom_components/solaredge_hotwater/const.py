@@ -34,6 +34,7 @@ API_TIMEOUT = 30
 
 # Polling
 DEFAULT_SCAN_INTERVAL = timedelta(seconds=60)
+INFO_REFRESH_INTERVAL = timedelta(minutes=15)
 
 # Config keys
 CONF_SITE_ID = "site_id"

@@ -21,12 +21,11 @@ class SolarEdgeWarmwaterEntity(CoordinatorEntity[SolarEdgeWarmwaterCoordinator])
     @property
     def device_info(self) -> DeviceInfo:
         """Return device information."""
-        info = self.coordinator.device_info_data or {}
-        device_info = info.get("deviceInfo") or {}
+        device = self.coordinator.data.device
         return DeviceInfo(
             identifiers={(DOMAIN, self.coordinator.device_id)},
-            name=device_info.get("name", "SolarEdge Warmwater"),
-            manufacturer=device_info.get("manufacturer", "SolarEdge"),
-            model=device_info.get("model"),
-            serial_number=device_info.get("serialNumber"),
+            name=device.get("name", "SolarEdge Warmwater"),
+            manufacturer=device.get("manufacturer", "SolarEdge"),
+            model=device.get("model"),
+            serial_number=device.get("serialNumber"),
         )
