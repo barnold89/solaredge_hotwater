@@ -129,5 +129,5 @@ class SolarEdgeWarmwaterSensor(SolarEdgeWarmwaterEntity, SensorEntity):
         """Return the sensor value."""
         data = self.coordinator.data
         if self.entity_description.nested_key:
-            data = data.get(self.entity_description.nested_key, {})
+            data = data.get(self.entity_description.nested_key) or {}
         return data.get(self.entity_description.value_fn)
