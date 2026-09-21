@@ -70,5 +70,13 @@
         "abort": {
             "already_configured": "This entry is already configured."
         }
+    },
+    "exceptions": {
+        "set_state_failed": {
+            "message": "Could not switch the water heater: {error}"
+        },
+        "auth_failed": {
+            "message": "SolarEdge rejected the credentials. Please re-authenticate the integration."
+        }
     }
 }

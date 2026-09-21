@@ -43,15 +43,23 @@ def test_current_option(data: dict[str, Any], expected: str) -> None:
     assert _entity(data).current_option == expected
 
 
-def test_select_option_requests_info_refresh() -> None:
-    """Refresh state and device info after switching the mode."""
+@pytest.mark.parametrize(
+    ("option", "args", "kwargs"),
+    [
+        (MODE_AUTO, ("AUTO",), {}),
+        (MODE_ON, ("MANUAL",), {"level": 100}),
+        (MODE_OFF, ("MANUAL",), {"level": 0}),
+    ],
+)
+def test_select_option_switches_through_coordinator(
+    option: str, args: tuple[str, ...], kwargs: dict[str, int]
+) -> None:
+    """Switch the mode through the coordinator, which handles errors and refresh."""
     entity = _entity({})
-    entity.coordinator.api.set_activation_state = AsyncMock()
-    entity.coordinator.async_refresh_after_write = AsyncMock()
+    entity.coordinator.async_set_activation_state = AsyncMock()
 
-    asyncio.run(entity.async_select_option(MODE_ON))
+    asyncio.run(entity.async_select_option(option))
 
-    entity.coordinator.api.set_activation_state.assert_awaited_once_with(
-        "site", "device", "MANUAL", level=100
+    entity.coordinator.async_set_activation_state.assert_awaited_once_with(
+        *args, **kwargs
     )
-    entity.coordinator.async_refresh_after_write.assert_awaited_once()
