@@ -89,5 +89,13 @@
             "already_configured": "Diese Integration ist bereits eingerichtet.",
             "reauth_successful": "Erneute Authentifizierung erfolgreich."
         }
+    },
+    "exceptions": {
+        "set_state_failed": {
+            "message": "Heizstab konnte nicht geschaltet werden: {error}"
+        },
+        "auth_failed": {
+            "message": "SolarEdge hat die Zugangsdaten abgelehnt. Bitte die Integration neu anmelden."
+        }
     }
 }

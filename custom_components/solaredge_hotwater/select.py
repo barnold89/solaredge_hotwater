@@ -64,23 +64,8 @@ class SolarEdgeOperationMode(SolarEdgeWarmwaterEntity, SelectEntity):
     async def async_select_option(self, option: str) -> None:
         """Set the operation mode."""
         if option == MODE_AUTO:
-            await self.coordinator.api.set_activation_state(
-                self.coordinator.site_id,
-                self.coordinator.device_id,
-                "AUTO",
-            )
+            await self.coordinator.async_set_activation_state("AUTO")
         elif option == MODE_ON:
-            await self.coordinator.api.set_activation_state(
-                self.coordinator.site_id,
-                self.coordinator.device_id,
-                "MANUAL",
-                level=100,
-            )
+            await self.coordinator.async_set_activation_state("MANUAL", level=100)
         elif option == MODE_OFF:
-            await self.coordinator.api.set_activation_state(
-                self.coordinator.site_id,
-                self.coordinator.device_id,
-                "MANUAL",
-                level=0,
-            )
-        await self.coordinator.async_refresh_after_write()
+            await self.coordinator.async_set_activation_state("MANUAL", level=0)

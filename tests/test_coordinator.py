@@ -10,7 +10,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import aiohttp
 import pytest
-from homeassistant.exceptions import ConfigEntryAuthFailed
+from homeassistant.exceptions import ConfigEntryAuthFailed, HomeAssistantError
 from homeassistant.helpers.update_coordinator import UpdateFailed
 
 from custom_components.solaredge_hotwater.api import ApiError, AuthenticationError
@@ -18,6 +18,7 @@ from custom_components.solaredge_hotwater.binary_sensor import (
     BINARY_SENSOR_DESCRIPTIONS,
     SolarEdgeWarmwaterBinarySensor,
 )
+from custom_components.solaredge_hotwater.const import DOMAIN
 from custom_components.solaredge_hotwater.coordinator import (
     HotWaterData,
     SolarEdgeWarmwaterCoordinator,
@@ -224,13 +225,85 @@ def test_info_authentication_error_starts_reauth(
 
 
 @pytest.mark.usefixtures("now")
+@pytest.mark.parametrize(
+    "error", [ApiError("HTTP 500"), aiohttp.ClientError(), TimeoutError()]
+)
 def test_state_error_skips_info(
-    coordinator: SolarEdgeWarmwaterCoordinator, api: MagicMock
+    coordinator: SolarEdgeWarmwaterCoordinator, api: MagicMock, error: Exception
 ) -> None:
-    """Do not fetch /info when /state already failed."""
-    api.get_device_state.side_effect = aiohttp.ClientError()
+    """Fail the update and skip /info when /state could not be fetched."""
+    api.get_device_state.side_effect = error
 
     with pytest.raises(UpdateFailed):
         _update(coordinator)
 
     api.get_device_info.assert_not_awaited()
+
+
+@pytest.mark.usefixtures("now")
+def test_state_authentication_error_starts_reauth(
+    coordinator: SolarEdgeWarmwaterCoordinator, api: MagicMock
+) -> None:
+    """Start reauth when /state rejects the credentials."""
+    api.get_device_state.side_effect = AuthenticationError
+
+    with pytest.raises(ConfigEntryAuthFailed):
+        _update(coordinator)
+
+
+@pytest.fixture
+def writable(
+    coordinator: SolarEdgeWarmwaterCoordinator, api: MagicMock
+) -> SolarEdgeWarmwaterCoordinator:
+    """Return the coordinator prepared for write calls."""
+    api.set_activation_state = AsyncMock()
+    coordinator.config_entry = MagicMock()
+    coordinator.async_request_refresh = AsyncMock()
+    return coordinator
+
+
+def test_set_activation_state_refreshes(
+    writable: SolarEdgeWarmwaterCoordinator, api: MagicMock
+) -> None:
+    """Send the write for the configured device and refresh afterwards."""
+    asyncio.run(writable.async_set_activation_state("MANUAL", level=100))
+
+    api.set_activation_state.assert_awaited_once_with(
+        "site", "device", "MANUAL", level=100
+    )
+    writable.async_request_refresh.assert_awaited_once()
+    assert writable._info_refresh_requested is True
+
+
+@pytest.mark.parametrize(
+    "error", [ApiError("HTTP 500"), aiohttp.ClientError(), TimeoutError()]
+)
+def test_set_activation_state_error(
+    writable: SolarEdgeWarmwaterCoordinator, api: MagicMock, error: Exception
+) -> None:
+    """Raise a translated error and skip the refresh when the write fails."""
+    api.set_activation_state.side_effect = error
+
+    with pytest.raises(HomeAssistantError) as exc_info:
+        asyncio.run(writable.async_set_activation_state("AUTO"))
+
+    assert exc_info.value.translation_domain == DOMAIN
+    assert exc_info.value.translation_key == "set_state_failed"
+    assert exc_info.value.translation_placeholders == {"error": str(error)}
+    writable.async_request_refresh.assert_not_awaited()
+    writable.config_entry.async_start_reauth.assert_not_called()
+
+
+def test_set_activation_state_authentication_error_starts_reauth(
+    writable: SolarEdgeWarmwaterCoordinator, api: MagicMock
+) -> None:
+    """Start reauth and raise a translated error when the write is rejected."""
+    api.set_activation_state.side_effect = AuthenticationError
+
+    with pytest.raises(HomeAssistantError) as exc_info:
+        asyncio.run(writable.async_set_activation_state("AUTO"))
+
+    assert exc_info.value.translation_domain == DOMAIN
+    assert exc_info.value.translation_key == "auth_failed"
+    writable.config_entry.async_start_reauth.assert_called_once_with(writable.hass)
+    writable.async_request_refresh.assert_not_awaited()

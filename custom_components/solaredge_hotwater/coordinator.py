@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
 import aiohttp
-from homeassistant.exceptions import ConfigEntryAuthFailed
+from homeassistant.exceptions import ConfigEntryAuthFailed, HomeAssistantError
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
 
@@ -83,13 +83,35 @@ class SolarEdgeWarmwaterCoordinator(DataUpdateCoordinator[HotWaterData]):
         self._info_refresh_requested = True
         await self.async_request_refresh()
 
+    async def async_set_activation_state(
+        self, mode: str, level: int | None = None
+    ) -> None:
+        """Switch the device and refresh; raise translated errors on failure."""
+        try:
+            await self.api.set_activation_state(
+                self.site_id, self.device_id, mode, level=level
+            )
+        except AuthenticationError as err:
+            if self.config_entry is not None:
+                self.config_entry.async_start_reauth(self.hass)
+            raise HomeAssistantError(
+                translation_domain=DOMAIN, translation_key="auth_failed"
+            ) from err
+        except (ApiError, aiohttp.ClientError, TimeoutError) as err:
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="set_state_failed",
+                translation_placeholders={"error": str(err)},
+            ) from err
+        await self.async_refresh_after_write()
+
     async def _async_update_data(self) -> HotWaterData:
         """Fetch device state and, when due, device info from the API."""
         try:
             state = await self.api.get_device_state(self.site_id, self.device_id)
         except AuthenticationError as err:
             raise ConfigEntryAuthFailed from err
-        except (aiohttp.ClientError, TimeoutError) as err:
+        except (ApiError, aiohttp.ClientError, TimeoutError) as err:
             msg = f"Error communicating with API: {err}"
             raise UpdateFailed(msg) from err
 
