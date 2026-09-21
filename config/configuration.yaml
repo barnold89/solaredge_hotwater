@@ -9,4 +9,4 @@ homeassistant:
 logger:
   default: info
   logs:
-    custom_components.solaredge-hotwater: debug
+    custom_components.solaredge_hotwater: debug

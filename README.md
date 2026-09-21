@@ -77,7 +77,7 @@ https://monitoring.solaredge.com/solaredge-web/p/site/<SITE_ID>/dashboard
 
 ## Contributing
 
-Pull requests and issue reports are welcome at [github.com/barnold89/solaredge-hotwater](https://github.com/barnold89/solaredge_hotwater).
+Pull requests and issue reports are welcome at [github.com/barnold89/solaredge_hotwater](https://github.com/barnold89/solaredge_hotwater).
 
 ## License
 
