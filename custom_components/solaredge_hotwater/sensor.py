@@ -21,19 +21,20 @@ from homeassistant.const import (
 from .entity import SolarEdgeWarmwaterEntity
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from homeassistant.core import HomeAssistant
     from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
     from . import SolarEdgeWarmwaterConfigEntry
-    from .coordinator import SolarEdgeWarmwaterCoordinator
+    from .coordinator import HotWaterData, SolarEdgeWarmwaterCoordinator
 
 
 @dataclass(frozen=True, kw_only=True)
 class SolarEdgeSensorDescription(SensorEntityDescription):
     """Describe a SolarEdge Warmwater sensor."""
 
-    value_fn: str
-    nested_key: str | None = None
+    value_fn: Callable[[HotWaterData], Any]
 
 
 SENSOR_DESCRIPTIONS: tuple[SolarEdgeSensorDescription, ...] = (
@@ -44,26 +45,25 @@ SENSOR_DESCRIPTIONS: tuple[SolarEdgeSensorDescription, ...] = (
         device_class=SensorDeviceClass.TEMPERATURE,
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=1,
-        value_fn="measuredTemperature",
-        nested_key="measurements",
+        value_fn=lambda data: data.measurements.get("measuredTemperature"),
     ),
     SolarEdgeSensorDescription(
         key="device_status",
         translation_key="device_status",
         icon="mdi:information-outline",
-        value_fn="deviceStatus",
+        value_fn=lambda data: data.state.get("deviceStatus"),
     ),
     SolarEdgeSensorDescription(
         key="auto_off_reason",
         translation_key="auto_off_reason",
         icon="mdi:power-plug-off",
-        value_fn="autoOffReason",
+        value_fn=lambda data: data.state.get("autoOffReason"),
     ),
     SolarEdgeSensorDescription(
         key="schedule_type",
         translation_key="schedule_type",
         icon="mdi:calendar-clock",
-        value_fn="scheduleType",
+        value_fn=lambda data: data.state.get("scheduleType"),
     ),
     SolarEdgeSensorDescription(
         key="rated_power",
@@ -71,7 +71,7 @@ SENSOR_DESCRIPTIONS: tuple[SolarEdgeSensorDescription, ...] = (
         native_unit_of_measurement=UnitOfPower.WATT,
         device_class=SensorDeviceClass.POWER,
         entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn="ratedPower",
+        value_fn=lambda data: data.configurations.get("ratedPower"),
     ),
     SolarEdgeSensorDescription(
         key="active_power",
@@ -80,8 +80,7 @@ SENSOR_DESCRIPTIONS: tuple[SolarEdgeSensorDescription, ...] = (
         device_class=SensorDeviceClass.POWER,
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=0,
-        value_fn="activePowerMeter",
-        nested_key="measurements",
+        value_fn=lambda data: data.measurements.get("activePowerMeter"),
     ),
     SolarEdgeSensorDescription(
         key="power_level",
@@ -89,7 +88,7 @@ SENSOR_DESCRIPTIONS: tuple[SolarEdgeSensorDescription, ...] = (
         native_unit_of_measurement=PERCENTAGE,
         state_class=SensorStateClass.MEASUREMENT,
         icon="mdi:flash",
-        value_fn="percentageLevel",
+        value_fn=lambda data: data.state.get("percentageLevel"),
     ),
 )
 
@@ -127,7 +126,4 @@ class SolarEdgeWarmwaterSensor(SolarEdgeWarmwaterEntity, SensorEntity):
     @property
     def native_value(self) -> Any:
         """Return the sensor value."""
-        data = self.coordinator.data
-        if self.entity_description.nested_key:
-            data = data.get(self.entity_description.nested_key) or {}
-        return data.get(self.entity_description.value_fn)
+        return self.entity_description.value_fn(self.coordinator.data)

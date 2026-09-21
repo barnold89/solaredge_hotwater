@@ -1,0 +1,35 @@
+{
+    "deviceInfo": {
+        "deviceId": "000000",
+        "name": "SolarEdge Heizstab",
+        "serialNumber": "0000000",
+        "manufacturer": "SolarEdge",
+        "model": "SMRT-HOT-WTR-30-S2",
+        "type": "LEVEL_CTRL"
+    },
+    "deviceConfigurations": {
+        "iconName": "GENERIC",
+        "ratedPower": 3000,
+        "excessPVEnabled": "ON"
+    },
+    "schedules": {
+        "allSchedules": [
+            {
+                "enable": false,
+                "scheduledDays": [
+                    "SUNDAY",
+                    "MONDAY",
+                    "TUESDAY",
+                    "WEDNESDAY",
+                    "THURSDAY",
+                    "FRIDAY",
+                    "SATURDAY"
+                ],
+                "startTime": 600,
+                "endTime": 720,
+                "smartSaver": false,
+                "triggerId": 0
+            }
+        ]
+    }
+}

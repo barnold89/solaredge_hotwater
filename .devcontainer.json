@@ -1,5 +1,5 @@
 {
-    "name": "barnold89/solaredge-hotwater",
+    "name": "barnold89/solaredge_hotwater",
     "image": "mcr.microsoft.com/devcontainers/base:debian",
     "postCreateCommand": "scripts/setup",
     "forwardPorts": [

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from homeassistant.components.binary_sensor import (
     BinarySensorDeviceClass,
@@ -15,18 +15,20 @@ from homeassistant.const import EntityCategory
 from .entity import SolarEdgeWarmwaterEntity
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from homeassistant.core import HomeAssistant
     from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
     from . import SolarEdgeWarmwaterConfigEntry
-    from .coordinator import SolarEdgeWarmwaterCoordinator
+    from .coordinator import HotWaterData, SolarEdgeWarmwaterCoordinator
 
 
 @dataclass(frozen=True, kw_only=True)
 class SolarEdgeBinarySensorDescription(BinarySensorEntityDescription):
     """Describe a SolarEdge Warmwater binary sensor."""
 
-    value_fn: str
+    value_fn: Callable[[HotWaterData], Any]
     on_value: str
 
 
@@ -36,14 +38,14 @@ BINARY_SENSOR_DESCRIPTIONS: tuple[SolarEdgeBinarySensorDescription, ...] = (
         translation_key="communication_status",
         device_class=BinarySensorDeviceClass.CONNECTIVITY,
         entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn="portiaCommunicationStatus",
+        value_fn=lambda data: data.state.get("portiaCommunicationStatus"),
         on_value="ACTIVE",
     ),
     SolarEdgeBinarySensorDescription(
         key="excess_pv_enabled",
         translation_key="excess_pv_enabled",
         icon="mdi:solar-power-variant",
-        value_fn="excessPVEnabled",
+        value_fn=lambda data: data.configurations.get("excessPVEnabled"),
         on_value="ON",
     ),
 )
@@ -82,7 +84,7 @@ class SolarEdgeWarmwaterBinarySensor(SolarEdgeWarmwaterEntity, BinarySensorEntit
     @property
     def is_on(self) -> bool | None:
         """Return True if the binary sensor is on."""
-        value = self.coordinator.data.get(self.entity_description.value_fn)
+        value = self.entity_description.value_fn(self.coordinator.data)
         if value is None:
             return None
         return value == self.entity_description.on_value
