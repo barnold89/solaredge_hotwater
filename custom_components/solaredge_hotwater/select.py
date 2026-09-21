@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from contextlib import suppress
+from typing import TYPE_CHECKING, Any
 
 from homeassistant.components.select import SelectEntity
 
@@ -15,6 +16,13 @@ if TYPE_CHECKING:
 
     from . import SolarEdgeWarmwaterConfigEntry
     from .coordinator import SolarEdgeWarmwaterCoordinator
+
+
+def _parse_level(value: Any) -> float:
+    """Return percentageLevel as a number; null or invalid values count as 0."""
+    with suppress(TypeError, ValueError):
+        return float(value)
+    return 0.0
 
 
 async def async_setup_entry(
@@ -44,8 +52,8 @@ class SolarEdgeOperationMode(SolarEdgeWarmwaterEntity, SelectEntity):
     @property
     def current_option(self) -> str | None:
         """Return the current operation mode."""
-        mode = self.coordinator.data.get("activationMode", "")
-        level = self.coordinator.data.get("percentageLevel", 0)
+        mode = self.coordinator.data.get("activationMode")
+        level = _parse_level(self.coordinator.data.get("percentageLevel"))
         if mode == "AUTO":
             return MODE_AUTO
         if mode == "MANUAL" and level > 0:
