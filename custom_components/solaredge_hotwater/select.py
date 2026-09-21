@@ -52,8 +52,9 @@ class SolarEdgeOperationMode(SolarEdgeWarmwaterEntity, SelectEntity):
     @property
     def current_option(self) -> str | None:
         """Return the current operation mode."""
-        mode = self.coordinator.data.get("activationMode")
-        level = _parse_level(self.coordinator.data.get("percentageLevel"))
+        state = self.coordinator.data.state
+        mode = state.get("activationMode")
+        level = _parse_level(state.get("percentageLevel"))
         if mode == "AUTO":
             return MODE_AUTO
         if mode == "MANUAL" and level > 0:
@@ -82,4 +83,4 @@ class SolarEdgeOperationMode(SolarEdgeWarmwaterEntity, SelectEntity):
                 "MANUAL",
                 level=0,
             )
-        await self.coordinator.async_request_refresh()
+        await self.coordinator.async_refresh_after_write()
