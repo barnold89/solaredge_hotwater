@@ -44,7 +44,7 @@ CONF_SCAN_INTERVAL = "scan_interval"
 MIN_SCAN_INTERVAL = 1
 MAX_SCAN_INTERVAL = 3600
 # Shorter intervals load the SolarEdge cloud and must be confirmed in the options
-SHORT_SCAN_INTERVAL = 30
+SHORT_SCAN_INTERVAL = 10
 
 # Operation modes
 MODE_AUTO = "auto"
