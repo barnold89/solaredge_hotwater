@@ -96,14 +96,19 @@ def test_confirmed_short_interval_is_saved() -> None:
     assert result["data"] == {CONF_SCAN_INTERVAL: 5}
 
 
-def test_change_interval_returns_to_form_with_10_s() -> None:
-    """Return to the form prefilled with 10 s and ask again for a short interval."""
-    flow = _flow({})
+@pytest.mark.parametrize(
+    ("options", "saved"), [({}, 60), ({CONF_SCAN_INTERVAL: 30}, 30)]
+)
+def test_change_interval_returns_to_form_with_saved_interval(
+    options: dict[str, Any], saved: int
+) -> None:
+    """Return to the form with the saved interval, 60 s without options."""
+    flow = _flow(options)
     _submit(flow, 5)
 
     result = asyncio.run(flow.async_step_change_interval())
 
     assert result["type"] == FlowResultType.FORM
     assert result["step_id"] == "init"
-    assert result["data_schema"]({}) == {CONF_SCAN_INTERVAL: 10}
+    assert result["data_schema"]({}) == {CONF_SCAN_INTERVAL: saved}
     assert _submit(flow, 5)["type"] == FlowResultType.MENU

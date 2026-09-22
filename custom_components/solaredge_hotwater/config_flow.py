@@ -267,10 +267,9 @@ class SolarEdgeWarmwaterOptionsFlow(OptionsFlow):
     async def async_step_change_interval(
         self, _user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Show the options again with the shortest unconfirmed interval."""
-        return self._show_init_form(
-            {**self._pending, CONF_SCAN_INTERVAL: SHORT_SCAN_INTERVAL}
-        )
+        """Show the options again with the saved interval, or the default."""
+        saved = _scan_interval(self._config_entry.options)
+        return self._show_init_form({**self._pending, CONF_SCAN_INTERVAL: saved})
 
     def _show_init_form(self, defaults: Mapping[str, Any]) -> ConfigFlowResult:
         """Show the options form prefilled with the given values."""
