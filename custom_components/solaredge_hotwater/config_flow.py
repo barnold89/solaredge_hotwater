@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import aiohttp
 import voluptuous as vol
@@ -16,6 +16,9 @@ from homeassistant.config_entries import (
 from homeassistant.const import CONF_PASSWORD, CONF_USERNAME
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
+if TYPE_CHECKING:
+    from collections.abc import Mapping
+
 from .api import AuthenticationError, SolarEdgeWarmwaterAPI
 from .const import (
     CONF_DEVICE_ID,
@@ -25,9 +28,16 @@ from .const import (
     DOMAIN,
     MAX_SCAN_INTERVAL,
     MIN_SCAN_INTERVAL,
+    SHORT_SCAN_INTERVAL,
 )
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def _scan_interval(options: Mapping[str, Any]) -> int:
+    """Return the polling interval in seconds from the options."""
+    return options.get(CONF_SCAN_INTERVAL, int(DEFAULT_SCAN_INTERVAL.total_seconds()))
+
 
 STEP_USER_DATA_SCHEMA = vol.Schema(
     {
@@ -219,23 +229,58 @@ class SolarEdgeWarmwaterOptionsFlow(OptionsFlow):
     def __init__(self, config_entry: ConfigEntry) -> None:
         """Initialize options flow."""
         self._config_entry = config_entry
+        self._pending: dict[str, Any] = {}
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         """Manage the options."""
         if user_input is not None:
+            current = _scan_interval(self._config_entry.options)
+            # Ask only when entering the short range; staying in it needs no
+            # new confirmation.
+            if user_input[CONF_SCAN_INTERVAL] < SHORT_SCAN_INTERVAL <= current:
+                self._pending = user_input
+                return await self.async_step_confirm_interval()
             return self.async_create_entry(data=user_input)
 
-        current = self._config_entry.options.get(
-            CONF_SCAN_INTERVAL, int(DEFAULT_SCAN_INTERVAL.total_seconds())
+        return self._show_init_form(self._config_entry.options)
+
+    async def async_step_confirm_interval(
+        self, _user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Warn about a short polling interval before saving it."""
+        return self.async_show_menu(
+            step_id="confirm_interval",
+            menu_options=["save_interval", "change_interval"],
+            description_placeholders={
+                "scan_interval": str(self._pending[CONF_SCAN_INTERVAL])
+            },
         )
 
+    async def async_step_save_interval(
+        self, _user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Save the confirmed short polling interval."""
+        return self.async_create_entry(data=self._pending)
+
+    async def async_step_change_interval(
+        self, _user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Show the options again with the shortest unconfirmed interval."""
+        return self._show_init_form(
+            {**self._pending, CONF_SCAN_INTERVAL: SHORT_SCAN_INTERVAL}
+        )
+
+    def _show_init_form(self, defaults: Mapping[str, Any]) -> ConfigFlowResult:
+        """Show the options form prefilled with the given values."""
         return self.async_show_form(
             step_id="init",
             data_schema=vol.Schema(
                 {
-                    vol.Required(CONF_SCAN_INTERVAL, default=current): vol.All(
+                    vol.Required(
+                        CONF_SCAN_INTERVAL, default=_scan_interval(defaults)
+                    ): vol.All(
                         int, vol.Range(min=MIN_SCAN_INTERVAL, max=MAX_SCAN_INTERVAL)
                     ),
                 }

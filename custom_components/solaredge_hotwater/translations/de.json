@@ -8,7 +8,15 @@
                     "scan_interval": "Abfrageintervall (Sekunden)"
                 },
                 "data_description": {
-                    "scan_interval": "Wie häufig (in Sekunden) der aktuelle Gerätestatus von der SolarEdge-API abgerufen wird."
+                    "scan_interval": "Wie häufig (in Sekunden) der aktuelle Gerätestatus von der SolarEdge-API abgerufen wird. Werte unter 30 Sekunden sind möglich, müssen aber bestätigt werden."
+                }
+            },
+            "confirm_interval": {
+                "title": "Kurzes Abfrageintervall",
+                "description": "Du hast {scan_interval} Sekunden eingestellt. Intervalle unter 30 Sekunden belasten die SolarEdge-Cloud und können dazu führen, dass SolarEdge die Abfragen drosselt.",
+                "menu_options": {
+                    "save_interval": "Verstanden, speichern",
+                    "change_interval": "Anderes Intervall wählen"
                 }
             }
         }

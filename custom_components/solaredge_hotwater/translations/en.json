@@ -8,7 +8,15 @@
                     "scan_interval": "Polling interval (seconds)"
                 },
                 "data_description": {
-                    "scan_interval": "How frequently (in seconds) the integration fetches the current device state from the SolarEdge API."
+                    "scan_interval": "How frequently (in seconds) the integration fetches the current device state from the SolarEdge API. Values below 30 seconds are possible but must be confirmed."
+                }
+            },
+            "confirm_interval": {
+                "title": "Short polling interval",
+                "description": "You set {scan_interval} seconds. Intervals below 30 seconds put load on the SolarEdge cloud and may cause SolarEdge to throttle requests.",
+                "menu_options": {
+                    "save_interval": "Understood, save",
+                    "change_interval": "Choose a different interval"
                 }
             }
         }
