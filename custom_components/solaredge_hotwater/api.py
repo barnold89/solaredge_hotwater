@@ -84,7 +84,7 @@ def _parse_login_form(html: str) -> tuple[str | None, str, dict[str, str]]:
     parser = _FormParser()
     try:
         parser.feed(html)
-    except Exception:  # noqa: BLE001
+    except Exception:
         _LOGGER.debug("HTML form parse error (non-fatal)", exc_info=True)
     return parser.form_action, parser.form_method, parser.inputs
 
