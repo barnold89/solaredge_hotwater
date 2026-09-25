@@ -13,7 +13,11 @@ import pytest
 from homeassistant.exceptions import ConfigEntryAuthFailed, HomeAssistantError
 from homeassistant.helpers.update_coordinator import UpdateFailed
 
-from custom_components.solaredge_hotwater.api import ApiError, AuthenticationError
+from custom_components.solaredge_hotwater.api import (
+    ApiError,
+    AuthenticationError,
+    LoginUnavailableError,
+)
 from custom_components.solaredge_hotwater.binary_sensor import (
     BINARY_SENSOR_DESCRIPTIONS,
     SolarEdgeWarmwaterBinarySensor,
@@ -160,7 +164,13 @@ def test_write_requests_info_refresh(
 
 
 @pytest.mark.parametrize(
-    "error", [ApiError("HTTP 500"), aiohttp.ClientError(), TimeoutError()]
+    "error",
+    [
+        ApiError("HTTP 500"),
+        LoginUnavailableError("login page returned 503"),
+        aiohttp.ClientError(),
+        TimeoutError(),
+    ],
 )
 def test_info_error_keeps_previous_info(
     coordinator: SolarEdgeWarmwaterCoordinator,
@@ -211,7 +221,13 @@ def test_info_error_after_write_is_retried(
 
 @pytest.mark.usefixtures("now")
 @pytest.mark.parametrize(
-    "error", [ApiError("HTTP 500"), aiohttp.ClientError(), TimeoutError()]
+    "error",
+    [
+        ApiError("HTTP 500"),
+        LoginUnavailableError("login page returned 503"),
+        aiohttp.ClientError(),
+        TimeoutError(),
+    ],
 )
 def test_info_error_on_first_update(
     coordinator: SolarEdgeWarmwaterCoordinator, api: MagicMock, error: Exception
@@ -237,7 +253,13 @@ def test_info_authentication_error_starts_reauth(
 
 @pytest.mark.usefixtures("now")
 @pytest.mark.parametrize(
-    "error", [ApiError("HTTP 500"), aiohttp.ClientError(), TimeoutError()]
+    "error",
+    [
+        ApiError("HTTP 500"),
+        LoginUnavailableError("login page returned 503"),
+        aiohttp.ClientError(),
+        TimeoutError(),
+    ],
 )
 def test_state_error_skips_info(
     coordinator: SolarEdgeWarmwaterCoordinator, api: MagicMock, error: Exception
@@ -286,7 +308,13 @@ def test_set_activation_state_refreshes(
 
 
 @pytest.mark.parametrize(
-    "error", [ApiError("HTTP 500"), aiohttp.ClientError(), TimeoutError()]
+    "error",
+    [
+        ApiError("HTTP 500"),
+        LoginUnavailableError("login page returned 503"),
+        aiohttp.ClientError(),
+        TimeoutError(),
+    ],
 )
 def test_set_activation_state_error(
     writable: SolarEdgeWarmwaterCoordinator, api: MagicMock, error: Exception

@@ -14,7 +14,7 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
 
-from .api import AuthenticationError, SolarEdgeWarmwaterAPI
+from .api import ApiError, AuthenticationError, SolarEdgeWarmwaterAPI
 from .const import PLATFORMS
 from .coordinator import SolarEdgeWarmwaterCoordinator
 
@@ -38,7 +38,7 @@ async def async_setup_entry(
         await api.authenticate()
     except AuthenticationError as err:
         raise ConfigEntryAuthFailed from err
-    except (aiohttp.ClientError, TimeoutError) as err:
+    except (ApiError, aiohttp.ClientError, TimeoutError) as err:
         raise ConfigEntryNotReady from err
 
     coordinator = SolarEdgeWarmwaterCoordinator(hass, entry, api)

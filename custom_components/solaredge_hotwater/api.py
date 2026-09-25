@@ -22,6 +22,8 @@ from .const import (
     HTTP_STATUS_BAD_REQUEST,
     HTTP_STATUS_NO_CONTENT,
     HTTP_STATUS_OK,
+    HTTP_STATUS_SERVER_ERROR,
+    HTTP_STATUS_TOO_MANY_REQUESTS,
     HTTP_STATUS_UNAUTHORIZED,
     LOGIN_BASE_URL,
     MFE_AUTH_CALLBACK_PATH,
@@ -46,6 +48,24 @@ class AuthenticationError(Exception):
 
 class ApiError(Exception):
     """Raised when an API call fails."""
+
+
+class LoginUnavailableError(ApiError):
+    """
+    Raised when the login flow itself does not work.
+
+    Throttling, server errors, a page that is not a login form, or a failed
+    token exchange: the stored credentials may well be correct, so callers
+    retry like after any other communication error instead of asking the user
+    to authenticate again.
+    """
+
+
+def _raise_if_login_unavailable(step: str, status: int) -> None:
+    """Treat throttling and server errors during login as a temporary outage."""
+    if status == HTTP_STATUS_TOO_MANY_REQUESTS or status >= HTTP_STATUS_SERVER_ERROR:
+        msg = f"SolarEdge login unavailable: {step} returned {status}"
+        raise LoginUnavailableError(msg)
 
 
 class _FormParser(HTMLParser):
@@ -103,21 +123,27 @@ async def _oauth_get_login_page(
     session: aiohttp.ClientSession,
     login_params: dict,
     timeout: aiohttp.ClientTimeout,
-) -> tuple[str, str]:
+) -> tuple[dict[str, str], str]:
     """
-    GET the login page. Returns (html, final_url).
+    GET the login page. Returns (form_inputs, final_url).
 
-    Raises if not on LOGIN_BASE_URL.
+    Anything that is not a login form on LOGIN_BASE_URL means the login is
+    unavailable, not that the credentials are wrong.
     """
     login_url = f"{LOGIN_BASE_URL}/login?{urlencode(login_params)}"
     async with session.get(login_url, timeout=timeout) as resp:
         _LOGGER.debug("GET login page -> %s", resp.status)
+        _raise_if_login_unavailable("login page", resp.status)
         html = await resp.text()
         final_url = str(resp.url)
     if not final_url.startswith(LOGIN_BASE_URL):
         msg = f"Login page redirected to unexpected URL: {final_url}"
-        raise AuthenticationError(msg)
-    return html, final_url
+        raise LoginUnavailableError(msg)
+    form_action, _, form_inputs = _parse_login_form(html)
+    if form_action is None:
+        msg = "Login page did not contain a form"
+        raise LoginUnavailableError(msg)
+    return form_inputs, final_url
 
 
 async def _oauth_post_credentials(
@@ -143,6 +169,7 @@ async def _oauth_post_credentials(
         allow_redirects=True,
     ) as resp:
         _LOGGER.debug("POST login -> %s, URL: %s", resp.status, resp.url)
+        _raise_if_login_unavailable("credential POST", resp.status)
         final_url = str(resp.url)
 
         # Handle 204 with Location header (SolarEdge specific)
@@ -154,23 +181,36 @@ async def _oauth_post_credentials(
                 timeout=timeout,
                 allow_redirects=True,
             ) as resp2:
+                _raise_if_login_unavailable("auth callback", resp2.status)
                 final_url = str(resp2.url)
 
     return final_url
 
 
 def _oauth_extract_code(final_url: str) -> str:
-    """Extract authorization code from OAuth callback URL."""
+    """
+    Extract the authorization code from the OAuth callback URL.
+
+    Ending up back on the login host is how SolarEdge rejects credentials: it
+    simply serves the login page again. Ending up anywhere else means the login
+    flow broke, which is not the user's problem to fix.
+    """
     if MFE_AUTH_CALLBACK not in final_url:
         _LOGGER.debug("Did not reach callback (final URL: %s)", final_url)
-        msg = "OAuth callback not reached - invalid credentials or network error"
-        raise AuthenticationError(msg)
+        if final_url.startswith(LOGIN_BASE_URL):
+            _LOGGER.warning(
+                "SolarEdge served the login page again, credentials rejected"
+            )
+            msg = "Credentials rejected by SolarEdge"
+            raise AuthenticationError(msg)
+        msg = f"OAuth callback not reached, login ended on {urlparse(final_url).netloc}"
+        raise LoginUnavailableError(msg)
     parsed = urlparse(final_url)
     q = parse_qs(parsed.query)
     code = (q.get("code") or [None])[0]
     if not code:
         msg = "OAuth callback URL missing authorization code"
-        raise AuthenticationError(msg)
+        raise LoginUnavailableError(msg)
     return code
 
 
@@ -208,13 +248,13 @@ async def _oauth_exchange_code(
         if resp.status != HTTP_STATUS_OK:
             text = await resp.text()
             msg = f"Token exchange failed with status {resp.status}: {text}"
-            raise AuthenticationError(msg)
+            raise LoginUnavailableError(msg)
         tok = await resp.json()
 
     access_token = tok.get("access_token")
     if not access_token:
         msg = "Token response missing access_token"
-        raise AuthenticationError(msg)
+        raise LoginUnavailableError(msg)
     return access_token
 
 
@@ -242,11 +282,10 @@ async def _perform_oauth_pkce_login(username: str, password: str) -> str:
         cookie_jar=aiohttp.CookieJar(),
         headers={"User-Agent": USER_AGENT},
     ) as login_session:
-        html, login_page_url = await _oauth_get_login_page(
+        form_inputs, login_page_url = await _oauth_get_login_page(
             login_session, login_params, timeout
         )
 
-        _, _, form_inputs = _parse_login_form(html)
         post_body = {
             k: v
             for k, v in form_inputs.items()
