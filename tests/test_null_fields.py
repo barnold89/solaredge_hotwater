@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import asyncio
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from custom_components.solaredge_hotwater.const import CONF_DEVICE_ID, CONF_SITE_ID
 from custom_components.solaredge_hotwater.coordinator import (
     HotWaterData,
     SolarEdgeWarmwaterCoordinator,
@@ -35,9 +36,10 @@ def _update(info: dict[str, Any] | None) -> HotWaterData:
     api = MagicMock()
     api.get_device_info = AsyncMock(return_value=info)
     api.get_device_state = AsyncMock(return_value={"activationMode": "AUTO"})
-    # The coordinator does not pass config_entry yet (SE-05).
-    with patch("homeassistant.helpers.frame.report_usage"):
-        coordinator = SolarEdgeWarmwaterCoordinator(MagicMock(), api, "site", "dev")
+    entry = MagicMock()
+    entry.data = {CONF_SITE_ID: "site", CONF_DEVICE_ID: "dev"}
+    entry.options = {}
+    coordinator = SolarEdgeWarmwaterCoordinator(MagicMock(), entry, api)
 
     return asyncio.run(coordinator._async_update_data())
 

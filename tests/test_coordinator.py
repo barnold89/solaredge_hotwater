@@ -18,7 +18,11 @@ from custom_components.solaredge_hotwater.binary_sensor import (
     BINARY_SENSOR_DESCRIPTIONS,
     SolarEdgeWarmwaterBinarySensor,
 )
-from custom_components.solaredge_hotwater.const import DOMAIN
+from custom_components.solaredge_hotwater.const import (
+    CONF_DEVICE_ID,
+    CONF_SITE_ID,
+    DOMAIN,
+)
 from custom_components.solaredge_hotwater.coordinator import (
     HotWaterData,
     SolarEdgeWarmwaterCoordinator,
@@ -55,11 +59,18 @@ def api() -> MagicMock:
 
 
 @pytest.fixture
-def coordinator(api: MagicMock) -> SolarEdgeWarmwaterCoordinator:
+def entry() -> MagicMock:
+    """Return a config entry for site "site" and device "device"."""
+    entry = MagicMock()
+    entry.data = {CONF_SITE_ID: "site", CONF_DEVICE_ID: "device"}
+    entry.options = {}
+    return entry
+
+
+@pytest.fixture
+def coordinator(entry: MagicMock, api: MagicMock) -> SolarEdgeWarmwaterCoordinator:
     """Return a coordinator backed by the mocked API client."""
-    # The coordinator does not pass config_entry yet (SE-05).
-    with patch("homeassistant.helpers.frame.report_usage"):
-        return SolarEdgeWarmwaterCoordinator(MagicMock(), api, "site", "device")
+    return SolarEdgeWarmwaterCoordinator(MagicMock(), entry, api)
 
 
 def _update(coordinator: SolarEdgeWarmwaterCoordinator) -> HotWaterData:
@@ -257,7 +268,6 @@ def writable(
 ) -> SolarEdgeWarmwaterCoordinator:
     """Return the coordinator prepared for write calls."""
     api.set_activation_state = AsyncMock()
-    coordinator.config_entry = MagicMock()
     coordinator.async_request_refresh = AsyncMock()
     return coordinator
 

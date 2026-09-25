@@ -81,8 +81,8 @@
             },
             "reauth_confirm": {
                 "title": "Neu anmelden",
+                "description": "SolarEdge hat die gespeicherten Zugangsdaten abgelehnt. Gib das Passwort für {username} erneut ein.",
                 "data": {
-                    "username": "Benutzername",
                     "password": "Passwort"
                 }
             }

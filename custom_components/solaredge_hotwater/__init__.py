@@ -15,7 +15,7 @@ if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
 
 from .api import AuthenticationError, SolarEdgeWarmwaterAPI
-from .const import CONF_DEVICE_ID, CONF_SCAN_INTERVAL, CONF_SITE_ID, PLATFORMS
+from .const import PLATFORMS
 from .coordinator import SolarEdgeWarmwaterCoordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -41,27 +41,13 @@ async def async_setup_entry(
     except (aiohttp.ClientError, TimeoutError) as err:
         raise ConfigEntryNotReady from err
 
-    site_id = entry.data[CONF_SITE_ID]
-    device_id = entry.data[CONF_DEVICE_ID]
-
-    scan_interval = entry.options.get(CONF_SCAN_INTERVAL)
-    coordinator = SolarEdgeWarmwaterCoordinator(
-        hass, api, site_id, device_id, scan_interval_seconds=scan_interval
-    )
+    coordinator = SolarEdgeWarmwaterCoordinator(hass, entry, api)
     await coordinator.async_config_entry_first_refresh()
 
     entry.runtime_data = coordinator
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
-    entry.async_on_unload(entry.add_update_listener(async_reload_entry))
     return True
-
-
-async def async_reload_entry(
-    hass: HomeAssistant, entry: SolarEdgeWarmwaterConfigEntry
-) -> None:
-    """Reload the config entry when options change."""
-    await hass.config_entries.async_reload(entry.entry_id)
 
 
 async def async_unload_entry(
