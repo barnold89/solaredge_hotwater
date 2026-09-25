@@ -12,7 +12,10 @@ from homeassistant.config_entries import SOURCE_REAUTH
 from homeassistant.const import CONF_PASSWORD, CONF_USERNAME
 from homeassistant.data_entry_flow import FlowResultType
 
-from custom_components.solaredge_hotwater.api import AuthenticationError
+from custom_components.solaredge_hotwater.api import (
+    AuthenticationError,
+    LoginUnavailableError,
+)
 from custom_components.solaredge_hotwater.config_flow import (
     SolarEdgeWarmwaterConfigFlow,
 )
@@ -120,6 +123,7 @@ def test_reauth_saves_the_password_and_reloads(
     ("error", "expected"),
     [
         (AuthenticationError, "invalid_auth"),
+        (LoginUnavailableError, "cannot_connect"),
         (aiohttp.ClientError, "cannot_connect"),
         (TimeoutError, "cannot_connect"),
         (RuntimeError, "unknown"),
