@@ -52,6 +52,11 @@ After setup, you can adjust the polling interval via the integration's **Configu
 |---|---|---|
 | Polling interval (seconds) | 60 | 1 – 3600 |
 
+A lost request does not blank the entities right away: up to three consecutive
+failed polls keep the last known values, so a brief cloud or network hiccup does
+not leave a gap in the history. Those values are stale for that time. Only once
+an outage outlasts them do the entities become unavailable.
+
 ## Entities
 
 | Entity | Type | Description |

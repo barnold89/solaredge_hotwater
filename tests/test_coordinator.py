@@ -26,6 +26,7 @@ from custom_components.solaredge_hotwater.const import (
     CONF_DEVICE_ID,
     CONF_SITE_ID,
     DOMAIN,
+    TOLERATED_STATE_FAILURES,
 )
 from custom_components.solaredge_hotwater.coordinator import (
     HotWaterData,
@@ -271,6 +272,63 @@ def test_state_error_skips_info(
         _update(coordinator)
 
     api.get_device_info.assert_not_awaited()
+
+
+@pytest.mark.usefixtures("now")
+@pytest.mark.parametrize(
+    "error",
+    [
+        ApiError("HTTP 500"),
+        LoginUnavailableError("login page returned 503"),
+        aiohttp.ClientError(),
+        TimeoutError(),
+    ],
+)
+def test_state_error_keeps_previous_data(
+    coordinator: SolarEdgeWarmwaterCoordinator, api: MagicMock, error: Exception
+) -> None:
+    """Return the previous data instead of failing while a short outage lasts."""
+    first = _update(coordinator)
+    api.get_device_state.side_effect = error
+
+    for _ in range(TOLERATED_STATE_FAILURES):
+        assert _update(coordinator) is first
+
+    api.get_device_info.assert_awaited_once()
+
+
+@pytest.mark.usefixtures("now")
+def test_state_error_fails_after_tolerated_failures(
+    coordinator: SolarEdgeWarmwaterCoordinator, api: MagicMock
+) -> None:
+    """Fail the update once the outage outlasts the tolerated failures."""
+    _update(coordinator)
+    api.get_device_state.side_effect = ApiError("HTTP 500")
+    for _ in range(TOLERATED_STATE_FAILURES):
+        _update(coordinator)
+
+    with pytest.raises(UpdateFailed):
+        _update(coordinator)
+
+
+@pytest.mark.usefixtures("now")
+def test_state_error_tolerance_resets_after_success(
+    coordinator: SolarEdgeWarmwaterCoordinator, api: MagicMock
+) -> None:
+    """Count the failures of the next outage from zero again."""
+    _update(coordinator)
+    api.get_device_state.side_effect = ApiError("HTTP 500")
+    for _ in range(TOLERATED_STATE_FAILURES):
+        _update(coordinator)
+
+    api.get_device_state.side_effect = None
+    _update(coordinator)
+
+    api.get_device_state.side_effect = ApiError("HTTP 500")
+    for _ in range(TOLERATED_STATE_FAILURES):
+        data = _update(coordinator)
+
+    assert data.state == STATE
 
 
 @pytest.mark.usefixtures("now")

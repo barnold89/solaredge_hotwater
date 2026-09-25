@@ -25,6 +25,7 @@ from .const import (
     DEFAULT_SCAN_INTERVAL,
     DOMAIN,
     INFO_REFRESH_INTERVAL,
+    TOLERATED_STATE_FAILURES,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -87,6 +88,7 @@ class SolarEdgeWarmwaterCoordinator(DataUpdateCoordinator[HotWaterData]):
         self.site_id = entry.data[CONF_SITE_ID]
         self.device_id = entry.data[CONF_DEVICE_ID]
         self._info_refresh_requested = False
+        self._failed_state_updates = 0
 
     async def async_refresh_after_write(self) -> None:
         """Refresh state and device info after a write to the device."""
@@ -121,9 +123,9 @@ class SolarEdgeWarmwaterCoordinator(DataUpdateCoordinator[HotWaterData]):
         except AuthenticationError as err:
             raise ConfigEntryAuthFailed from err
         except (ApiError, aiohttp.ClientError, TimeoutError) as err:
-            msg = f"Error communicating with API: {err}"
-            raise UpdateFailed(msg) from err
+            return self._tolerate_state_error(err)
 
+        self._failed_state_updates = 0
         info, last_info_update = await self._async_fetch_info()
         return HotWaterData(
             state=state or {},
@@ -131,6 +133,30 @@ class SolarEdgeWarmwaterCoordinator(DataUpdateCoordinator[HotWaterData]):
             schedules=_schedules(info),
             last_info_update=last_info_update,
         )
+
+    def _tolerate_state_error(self, err: Exception) -> HotWaterData:
+        """
+        Return the previous data while a short outage lasts.
+
+        A single lost request would otherwise turn every entity unavailable for
+        a whole interval, which shows up as a gap in the history. The first
+        TOLERATED_STATE_FAILURES consecutive failures keep the last values
+        instead. Those values are stale, and the entities go unavailable once
+        the outage outlasts them.
+        """
+        self._failed_state_updates += 1
+        previous = self.data
+        if previous is None or self._failed_state_updates > TOLERATED_STATE_FAILURES:
+            msg = f"Error communicating with API: {err}"
+            raise UpdateFailed(msg) from err
+
+        _LOGGER.warning(
+            "Error fetching device state, keeping previous data (%s of %s): %s",
+            self._failed_state_updates,
+            TOLERATED_STATE_FAILURES,
+            err,
+        )
+        return previous
 
     async def _async_fetch_info(self) -> tuple[dict[str, Any], datetime]:
         """
