@@ -11,7 +11,7 @@ from homeassistant.config_entries import (
     ConfigEntry,
     ConfigFlow,
     ConfigFlowResult,
-    OptionsFlow,
+    OptionsFlowWithReload,
 )
 from homeassistant.const import CONF_PASSWORD, CONF_USERNAME
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
@@ -162,23 +162,29 @@ class SolarEdgeWarmwaterConfigFlow(ConfigFlow, domain=DOMAIN):
         )
 
     @staticmethod
-    def async_get_options_flow(config_entry: ConfigEntry) -> OptionsFlow:
+    def async_get_options_flow(
+        config_entry: ConfigEntry,  # noqa: ARG004
+    ) -> SolarEdgeWarmwaterOptionsFlow:
         """Return the options flow handler."""
-        return SolarEdgeWarmwaterOptionsFlow(config_entry)
+        return SolarEdgeWarmwaterOptionsFlow()
 
-    async def async_step_reauth(self) -> ConfigFlowResult:
-        """Handle re-authentication."""
+    async def async_step_reauth(
+        self, _entry_data: Mapping[str, Any]
+    ) -> ConfigFlowResult:
+        """Handle re-authentication after SolarEdge rejected the credentials."""
         return await self.async_step_reauth_confirm()
 
     async def async_step_reauth_confirm(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Handle re-authentication confirmation."""
+        """Ask for the password of the configured account and verify it."""
+        entry = self._get_reauth_entry()
+        username = entry.data[CONF_USERNAME]
         errors: dict[str, str] = {}
 
         if user_input is not None:
             api = SolarEdgeWarmwaterAPI(
-                username=user_input[CONF_USERNAME],
+                username=username,
                 password=user_input[CONF_PASSWORD],
                 session=async_get_clientsession(self.hass),
             )
@@ -193,50 +199,30 @@ class SolarEdgeWarmwaterConfigFlow(ConfigFlow, domain=DOMAIN):
                 _LOGGER.exception("Unexpected error during re-auth")
                 errors["base"] = "unknown"
             else:
-                entry_id = self.context.get("entry_id")
-                entry = (
-                    self.hass.config_entries.async_get_entry(entry_id)
-                    if entry_id
-                    else None
+                return self.async_update_reload_and_abort(
+                    entry, data_updates={CONF_PASSWORD: user_input[CONF_PASSWORD]}
                 )
-                if entry:
-                    self.hass.config_entries.async_update_entry(
-                        entry,
-                        data={
-                            **entry.data,
-                            CONF_USERNAME: user_input[CONF_USERNAME],
-                            CONF_PASSWORD: user_input[CONF_PASSWORD],
-                        },
-                    )
-                    await self.hass.config_entries.async_reload(entry.entry_id)
-                return self.async_abort(reason="reauth_successful")
 
         return self.async_show_form(
             step_id="reauth_confirm",
-            data_schema=vol.Schema(
-                {
-                    vol.Required(CONF_USERNAME): str,
-                    vol.Required(CONF_PASSWORD): str,
-                }
-            ),
+            data_schema=vol.Schema({vol.Required(CONF_PASSWORD): str}),
+            description_placeholders={CONF_USERNAME: username},
             errors=errors,
         )
 
 
-class SolarEdgeWarmwaterOptionsFlow(OptionsFlow):
+class SolarEdgeWarmwaterOptionsFlow(OptionsFlowWithReload):
     """Handle options for SolarEdge Warmwater."""
 
-    def __init__(self, config_entry: ConfigEntry) -> None:
-        """Initialize options flow."""
-        self._config_entry = config_entry
-        self._pending: dict[str, Any] = {}
+    # Set in async_step_init, read by the confirmation steps.
+    _pending: dict[str, Any]
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         """Manage the options."""
         if user_input is not None:
-            current = _scan_interval(self._config_entry.options)
+            current = _scan_interval(self.config_entry.options)
             # Ask only when entering the short range; staying in it needs no
             # new confirmation.
             if user_input[CONF_SCAN_INTERVAL] < SHORT_SCAN_INTERVAL <= current:
@@ -244,7 +230,7 @@ class SolarEdgeWarmwaterOptionsFlow(OptionsFlow):
                 return await self.async_step_confirm_interval()
             return self.async_create_entry(data=user_input)
 
-        return self._show_init_form(self._config_entry.options)
+        return self._show_init_form(self.config_entry.options)
 
     async def async_step_confirm_interval(
         self, _user_input: dict[str, Any] | None = None
@@ -268,7 +254,7 @@ class SolarEdgeWarmwaterOptionsFlow(OptionsFlow):
         self, _user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         """Show the options again with the saved interval, or the default."""
-        saved = _scan_interval(self._config_entry.options)
+        saved = _scan_interval(self.config_entry.options)
         return self._show_init_form({**self._pending, CONF_SCAN_INTERVAL: saved})
 
     def _show_init_form(self, defaults: Mapping[str, Any]) -> ConfigFlowResult:

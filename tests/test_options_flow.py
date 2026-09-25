@@ -15,6 +15,8 @@ from custom_components.solaredge_hotwater.config_flow import (
 )
 from custom_components.solaredge_hotwater.const import CONF_SCAN_INTERVAL
 
+from .common import ENTRY_ID, mock_hass
+
 if TYPE_CHECKING:
     from homeassistant.config_entries import ConfigFlowResult
 
@@ -23,7 +25,10 @@ def _flow(options: dict[str, Any]) -> SolarEdgeWarmwaterOptionsFlow:
     """Create an options flow for an entry with the given saved options."""
     entry = MagicMock()
     entry.options = options
-    return SolarEdgeWarmwaterOptionsFlow(entry)
+    flow = SolarEdgeWarmwaterOptionsFlow()
+    flow.hass = mock_hass(entry)
+    flow.handler = ENTRY_ID
+    return flow
 
 
 def _submit(

@@ -63,8 +63,8 @@
             },
             "reauth_confirm": {
                 "title": "Re-authenticate",
+                "description": "SolarEdge rejected the stored credentials. Enter the password for {username} again.",
                 "data": {
-                    "username": "Username",
                     "password": "Password"
                 }
             }
@@ -76,7 +76,8 @@
             "unknown": "Unknown error occurred."
         },
         "abort": {
-            "already_configured": "This entry is already configured."
+            "already_configured": "This entry is already configured.",
+            "reauth_successful": "Re-authentication was successful."
         }
     },
     "exceptions": {

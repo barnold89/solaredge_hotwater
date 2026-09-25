@@ -15,8 +15,17 @@ from homeassistant.util import dt as dt_util
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
 
+    from . import SolarEdgeWarmwaterConfigEntry
+
 from .api import ApiError, AuthenticationError, SolarEdgeWarmwaterAPI
-from .const import DEFAULT_SCAN_INTERVAL, DOMAIN, INFO_REFRESH_INTERVAL
+from .const import (
+    CONF_DEVICE_ID,
+    CONF_SCAN_INTERVAL,
+    CONF_SITE_ID,
+    DEFAULT_SCAN_INTERVAL,
+    DOMAIN,
+    INFO_REFRESH_INTERVAL,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -54,28 +63,29 @@ def _schedules(info: dict[str, Any]) -> list[dict[str, Any]]:
 class SolarEdgeWarmwaterCoordinator(DataUpdateCoordinator[HotWaterData]):
     """Coordinator to fetch data from the SolarEdge API."""
 
+    # The entry is always passed, so it is never None as in the base class.
+    config_entry: SolarEdgeWarmwaterConfigEntry
+
     def __init__(
         self,
         hass: HomeAssistant,
+        entry: SolarEdgeWarmwaterConfigEntry,
         api: SolarEdgeWarmwaterAPI,
-        site_id: str,
-        device_id: str,
-        scan_interval_seconds: int | None = None,
     ) -> None:
-        """Initialize the coordinator."""
-        if scan_interval_seconds is not None:
-            interval = timedelta(seconds=scan_interval_seconds)
-        else:
-            interval = DEFAULT_SCAN_INTERVAL
+        """Initialize the coordinator for the device behind the config entry."""
+        seconds = entry.options.get(CONF_SCAN_INTERVAL)
         super().__init__(
             hass,
             _LOGGER,
+            config_entry=entry,
             name=DOMAIN,
-            update_interval=interval,
+            update_interval=(
+                DEFAULT_SCAN_INTERVAL if seconds is None else timedelta(seconds=seconds)
+            ),
         )
         self.api = api
-        self.site_id = site_id
-        self.device_id = device_id
+        self.site_id = entry.data[CONF_SITE_ID]
+        self.device_id = entry.data[CONF_DEVICE_ID]
         self._info_refresh_requested = False
 
     async def async_refresh_after_write(self) -> None:
@@ -92,8 +102,7 @@ class SolarEdgeWarmwaterCoordinator(DataUpdateCoordinator[HotWaterData]):
                 self.site_id, self.device_id, mode, level=level
             )
         except AuthenticationError as err:
-            if self.config_entry is not None:
-                self.config_entry.async_start_reauth(self.hass)
+            self.config_entry.async_start_reauth(self.hass)
             raise HomeAssistantError(
                 translation_domain=DOMAIN, translation_key="auth_failed"
             ) from err
