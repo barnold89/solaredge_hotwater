@@ -128,7 +128,7 @@ def test_callback_with_code_returns_it() -> None:
     assert _oauth_extract_code(f"{MFE_AUTH_CALLBACK}?code=abc123") == "abc123"
 
 
-async def _exchange_code(response: MagicMock) -> str:
+async def _exchange_code(response: MagicMock) -> tuple[str, str | None]:
     """Exchange the code against a token endpoint answering with that response."""
     token_session = MagicMock()
     token_session.post.return_value.__aenter__.return_value = response
@@ -154,12 +154,22 @@ async def test_token_response_without_token_is_unavailable() -> None:
         await _exchange_code(response)
 
 
-async def test_token_exchange_returns_access_token() -> None:
-    """Return the access token from a good response."""
+async def test_token_exchange_returns_access_and_refresh_token() -> None:
+    """Return the access and refresh token from a good response."""
+    response = _response(200)
+    response.json = AsyncMock(
+        return_value={"access_token": "token", "refresh_token": "refresh"}
+    )
+
+    assert await _exchange_code(response) == ("token", "refresh")
+
+
+async def test_token_exchange_without_refresh_token() -> None:
+    """A missing refresh token is no error, the client then logs in on 401."""
     response = _response(200)
     response.json = AsyncMock(return_value={"access_token": "token"})
 
-    assert await _exchange_code(response) == "token"
+    assert await _exchange_code(response) == ("token", None)
 
 
 async def test_authenticate_runs_the_whole_flow_and_reports_rejection() -> None:

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import hashlib
 import logging
@@ -218,8 +219,8 @@ async def _oauth_exchange_code(
     code: str,
     code_verifier: str,
     timeout: aiohttp.ClientTimeout,
-) -> str:
-    """Exchange authorization code for access token."""
+) -> tuple[str, str | None]:
+    """Exchange authorization code for (access_token, refresh_token)."""
     token_data = {
         "grant_type": "authorization_code",
         "code": code,
@@ -255,15 +256,17 @@ async def _oauth_exchange_code(
     if not access_token:
         msg = "Token response missing access_token"
         raise LoginUnavailableError(msg)
-    return access_token
+    return access_token, tok.get("refresh_token")
 
 
-async def _perform_oauth_pkce_login(username: str, password: str) -> str:
+async def _perform_oauth_pkce_login(
+    username: str, password: str
+) -> tuple[str, str | None]:
     """
     Perform full OAuth2 PKCE login flow.
 
     Steps: GET login page → POST credentials → extract code → exchange for token.
-    Returns access_token.
+    Returns (access_token, refresh_token); the refresh token may be missing.
     """
     code_verifier, code_challenge = _pkce_verifier_and_challenge()
     login_params = {
@@ -299,10 +302,10 @@ async def _perform_oauth_pkce_login(username: str, password: str) -> str:
         )
 
     code = _oauth_extract_code(final_url)
-    access_token = await _oauth_exchange_code(code, code_verifier, timeout)
+    tokens = await _oauth_exchange_code(code, code_verifier, timeout)
 
     _LOGGER.debug("OAuth PKCE login successful")
-    return access_token
+    return tokens
 
 
 class SolarEdgeWarmwaterAPI:
@@ -316,65 +319,120 @@ class SolarEdgeWarmwaterAPI:
         self._password = password
         self._session = session
         self._access_token: str | None = None
+        # Kept in memory only: after a restart the integration logs in again
+        self._refresh_token: str | None = None
+        # Whether the access token came from a password login, not a refresh
+        self._token_from_login = False
+        # Serializes refresh and login, so parallel requests share one renewal
+        self._token_lock = asyncio.Lock()
 
     async def authenticate(self) -> bool:
         """Perform OAuth2 PKCE login. Returns True on success, raises on failure."""
-        self._access_token = await _perform_oauth_pkce_login(
-            self._username, self._password
-        )
+        async with self._token_lock:
+            await self._login()
         return True
 
-    def _request_headers(self) -> dict[str, str]:
+    async def _login(self) -> None:
+        """Log in with the password. Callers hold the token lock."""
+        self._access_token, self._refresh_token = await _perform_oauth_pkce_login(
+            self._username, self._password
+        )
+        self._token_from_login = True
+
+    async def _refresh(self) -> bool:
+        """
+        Renew the access token with the refresh token. Callers hold the token lock.
+
+        The lifetime of the refresh token is unknown, so a failure is the normal
+        way it ends: drop it and return False, the caller then logs in again.
+        """
+        token_data = {
+            "grant_type": "refresh_token",
+            "refresh_token": self._refresh_token,
+            "client_id": SOLAREDGE_ONE_CLIENT_ID,
+        }
+        token_headers = {
+            "Content-Type": "application/x-www-form-urlencoded",
+            "Accept": "*/*",
+            "Origin": BASE_URL,
+            "Referer": f"{BASE_URL}/",
+            "User-Agent": USER_AGENT,
+        }
+        timeout = aiohttp.ClientTimeout(total=API_TIMEOUT)
+        tok: dict | None = None
+        try:
+            async with self._session.post(
+                TOKEN_URL, data=token_data, headers=token_headers, timeout=timeout
+            ) as resp:
+                _LOGGER.debug("POST oauth2/token (refresh) -> %s", resp.status)
+                if resp.status == HTTP_STATUS_OK:
+                    tok = await resp.json()
+        except (aiohttp.ClientError, TimeoutError, ValueError) as err:
+            _LOGGER.debug("Token refresh failed: %s", type(err).__name__)
+
+        access_token = tok.get("access_token") if isinstance(tok, dict) else None
+        if not access_token:
+            _LOGGER.debug("Token refresh unsuccessful, falling back to login")
+            self._refresh_token = None
+            return False
+
+        self._access_token = access_token
+        # SolarEdge does not rotate the refresh token; take a new one if it does
+        self._refresh_token = tok.get("refresh_token") or self._refresh_token
+        self._token_from_login = False
+        _LOGGER.debug("Token refresh successful")
+        return True
+
+    async def _renew_token(
+        self, stale_token: str | None, *, allow_refresh: bool = True
+    ) -> tuple[str, bool]:
+        """
+        Replace a rejected access token. Returns (token, came from a login).
+
+        A caller that waited on the lock reuses the token the other caller
+        obtained instead of renewing again. Without allow_refresh, only a token
+        from a login counts, because a refreshed one was just rejected.
+        """
+        async with self._token_lock:
+            if (
+                self._access_token
+                and self._access_token != stale_token
+                and (allow_refresh or self._token_from_login)
+            ):
+                return self._access_token, self._token_from_login
+            if not allow_refresh:
+                self._refresh_token = None
+            if not (self._refresh_token and await self._refresh()):
+                await self._login()
+            # Both paths set the access token or raise
+            return self._access_token or "", self._token_from_login
+
+    def _request_headers(self, token: str) -> dict[str, str]:
         """Build headers for authenticated API requests."""
-        if not self._access_token:
-            msg = "Not authenticated"
-            raise AuthenticationError(msg)
         return {
             "Accept": "application/json",
             "Content-Type": "application/json",
-            "Authorization": f"Bearer {self._access_token}",
+            "Authorization": f"Bearer {token}",
             "User-Agent": USER_AGENT,
             "Origin": BASE_URL,
             "Referer": f"{BASE_URL}/",
         }
 
-    async def _request(
-        self,
-        method: str,
-        path: str,
-        json_data: dict | None = None,
-        *,
-        retry_auth: bool = True,
-    ) -> dict:
-        """Make an authenticated API request with automatic re-auth on 401."""
+    async def _send(
+        self, method: str, path: str, json_data: dict | None, token: str
+    ) -> dict | None:
+        """Send one request with that token. Returns None on 401."""
         url = f"{BASE_URL}{path}"
         timeout = aiohttp.ClientTimeout(total=API_TIMEOUT)
-
-        try:
-            headers = self._request_headers()
-        except AuthenticationError:
-            if not retry_auth:
-                raise
-            await self.authenticate()
-            headers = self._request_headers()
-
-        kwargs: dict = {"headers": headers, "timeout": timeout}
+        kwargs: dict = {"headers": self._request_headers(token), "timeout": timeout}
         if json_data is not None:
             kwargs["json"] = json_data
 
         async with self._session.request(method, url, **kwargs) as resp:
             _LOGGER.debug("%s %s -> %s", method, path, resp.status)
 
-            if resp.status == HTTP_STATUS_UNAUTHORIZED and retry_auth:
-                _LOGGER.debug("401 on %s %s, re-authenticating", method, path)
-                self._access_token = None
-                await self.authenticate()
-                return await self._request(method, path, json_data, retry_auth=False)
-
             if resp.status == HTTP_STATUS_UNAUTHORIZED:
-                self._access_token = None
-                msg = f"Authentication failed for {method} {path}"
-                raise AuthenticationError(msg)
+                return None
 
             if resp.status >= HTTP_STATUS_BAD_REQUEST:
                 text = await resp.text()
@@ -382,6 +440,39 @@ class SolarEdgeWarmwaterAPI:
                 raise ApiError(msg)
 
             return await resp.json()
+
+    async def _request(
+        self, method: str, path: str, json_data: dict | None = None
+    ) -> dict:
+        """
+        Make an authenticated API request, renewing the token on 401.
+
+        On 401 the token is refreshed, or replaced by a login when that fails,
+        and the request repeated once. A 401 on a refreshed token says nothing
+        about the password, so it gets one more try with a fresh login. Only a
+        401 that survives a fresh login raises AuthenticationError.
+        """
+        token = self._access_token
+        if not token:
+            token, _ = await self._renew_token(None)
+        data = await self._send(method, path, json_data, token)
+        if data is not None:
+            return data
+
+        _LOGGER.debug("401 on %s %s, renewing token", method, path)
+        token, from_login = await self._renew_token(token)
+        data = await self._send(method, path, json_data, token)
+        if data is None and not from_login:
+            _LOGGER.debug("401 on %s %s after token refresh, logging in", method, path)
+            token, _ = await self._renew_token(token, allow_refresh=False)
+            data = await self._send(method, path, json_data, token)
+        if data is not None:
+            return data
+
+        if self._access_token == token:
+            self._access_token = None
+        msg = f"Authentication failed for {method} {path}"
+        raise AuthenticationError(msg)
 
     # ── Data endpoints ──────────────────────────────────────────────
 
