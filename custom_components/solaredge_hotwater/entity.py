@@ -5,7 +5,7 @@ from __future__ import annotations
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN
+from .const import BASE_URL, DOMAIN, SITE_PORTAL_PATH
 from .coordinator import SolarEdgeWarmwaterCoordinator
 
 
@@ -28,4 +28,6 @@ class SolarEdgeWarmwaterEntity(CoordinatorEntity[SolarEdgeWarmwaterCoordinator])
             manufacturer=device.get("manufacturer", "SolarEdge"),
             model=device.get("model"),
             serial_number=device.get("serialNumber"),
+            configuration_url=BASE_URL
+            + SITE_PORTAL_PATH.format(site_id=self.coordinator.site_id),
         )
