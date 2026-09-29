@@ -44,7 +44,6 @@ BINARY_SENSOR_DESCRIPTIONS: tuple[SolarEdgeBinarySensorDescription, ...] = (
     SolarEdgeBinarySensorDescription(
         key="excess_pv_enabled",
         translation_key="excess_pv_enabled",
-        icon="mdi:solar-power-variant",
         value_fn=lambda data: data.configurations.get("excessPVEnabled"),
         on_value="ON",
     ),

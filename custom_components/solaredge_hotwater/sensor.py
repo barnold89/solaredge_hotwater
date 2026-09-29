@@ -50,19 +50,16 @@ SENSOR_DESCRIPTIONS: tuple[SolarEdgeSensorDescription, ...] = (
     SolarEdgeSensorDescription(
         key="device_status",
         translation_key="device_status",
-        icon="mdi:information-outline",
         value_fn=lambda data: data.state.get("deviceStatus"),
     ),
     SolarEdgeSensorDescription(
         key="auto_off_reason",
         translation_key="auto_off_reason",
-        icon="mdi:power-plug-off",
         value_fn=lambda data: data.state.get("autoOffReason"),
     ),
     SolarEdgeSensorDescription(
         key="schedule_type",
         translation_key="schedule_type",
-        icon="mdi:calendar-clock",
         value_fn=lambda data: data.state.get("scheduleType"),
     ),
     SolarEdgeSensorDescription(
@@ -87,7 +84,6 @@ SENSOR_DESCRIPTIONS: tuple[SolarEdgeSensorDescription, ...] = (
         translation_key="power_level",
         native_unit_of_measurement=PERCENTAGE,
         state_class=SensorStateClass.MEASUREMENT,
-        icon="mdi:flash",
         value_fn=lambda data: data.state.get("percentageLevel"),
     ),
 )

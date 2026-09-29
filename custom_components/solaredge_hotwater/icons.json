@@ -1,0 +1,33 @@
+{
+    "entity": {
+        "sensor": {
+            "device_status": {
+                "default": "mdi:information-outline"
+            },
+            "auto_off_reason": {
+                "default": "mdi:power-plug-off"
+            },
+            "schedule_type": {
+                "default": "mdi:calendar-clock"
+            },
+            "power_level": {
+                "default": "mdi:flash"
+            }
+        },
+        "binary_sensor": {
+            "excess_pv_enabled": {
+                "default": "mdi:solar-power-variant"
+            }
+        },
+        "select": {
+            "operation_mode": {
+                "default": "mdi:water-boiler",
+                "state": {
+                    "auto": "mdi:water-boiler-auto",
+                    "on": "mdi:water-boiler",
+                    "off": "mdi:water-boiler-off"
+                }
+            }
+        }
+    }
+}

@@ -40,7 +40,6 @@ class SolarEdgeOperationMode(SolarEdgeWarmwaterEntity, SelectEntity):
 
     _attr_options = OPERATION_MODES
     _attr_translation_key = "operation_mode"
-    _attr_icon = "mdi:water-boiler"
 
     def __init__(self, coordinator: SolarEdgeWarmwaterCoordinator) -> None:
         """Initialize the operation mode entity."""
