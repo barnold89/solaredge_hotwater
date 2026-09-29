@@ -90,6 +90,11 @@ class SolarEdgeWarmwaterCoordinator(DataUpdateCoordinator[HotWaterData]):
         self._info_refresh_requested = False
         self._failed_state_updates = 0
 
+    @property
+    def failed_state_updates(self) -> int:
+        """Return the consecutive failed state updates served from old data."""
+        return self._failed_state_updates
+
     async def async_refresh_after_write(self) -> None:
         """Refresh state and device info after a write to the device."""
         self._info_refresh_requested = True
