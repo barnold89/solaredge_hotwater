@@ -63,13 +63,14 @@ def test_sensor_values() -> None:
     }
 
     assert values == {
-        "temperature": 70.0,
+        "temperature": 67.60212,
         "device_status": "ACTIVE",
-        "auto_off_reason": None,
+        "auto_off_reason": "PENDING_EXCESS_SOLAR",
         "schedule_type": "EXCESS_PV",
         "rated_power": 3000,
-        "active_power": 0,
-        "power_level": 100,
+        # The recorded idle state carries no activePowerMeter at all.
+        "active_power": None,
+        "power_level": 0,
     }
 
 

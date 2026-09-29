@@ -53,7 +53,7 @@ async def test_setup_creates_entities_and_unload_removes_them(
         "sensor", DOMAIN, f"site_{DEVICE_ID}_temperature"
     )
     assert entity_id is not None
-    assert hass.states.get(entity_id).state == "70.0"
+    assert hass.states.get(entity_id).state == "67.60212"
     mode_id = entity_registry.async_get_entity_id(
         "select", DOMAIN, f"site_{DEVICE_ID}_operation_mode"
     )
