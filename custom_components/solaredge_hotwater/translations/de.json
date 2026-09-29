@@ -85,6 +85,18 @@
                 "data": {
                     "password": "Passwort"
                 }
+            },
+            "reconfigure": {
+                "title": "Neu konfigurieren",
+                "description": "Ändere das SolarEdge-Konto, mit dem dieser Heizstab abgefragt wird. Der Standort muss diesen Heizstab weiterhin enthalten; der Verlauf bleibt erhalten.",
+                "data": {
+                    "username": "Benutzername",
+                    "password": "Passwort",
+                    "site_id": "Standort-ID"
+                },
+                "data_description": {
+                    "password": "Leer lassen, um das gespeicherte Passwort zu behalten."
+                }
             }
         },
         "error": {
@@ -95,7 +107,9 @@
         },
         "abort": {
             "already_configured": "Diese Integration ist bereits eingerichtet.",
-            "reauth_successful": "Erneute Authentifizierung erfolgreich."
+            "reauth_successful": "Erneute Authentifizierung erfolgreich.",
+            "reconfigure_successful": "Neukonfiguration erfolgreich.",
+            "unique_id_mismatch": "Dieser Standort enthält den eingerichteten Heizstab nicht. Beim Neukonfigurieren lässt sich nicht auf einen anderen Standort oder ein anderes Gerät wechseln; richte die Integration dafür neu ein."
         }
     },
     "exceptions": {

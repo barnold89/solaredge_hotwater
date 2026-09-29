@@ -1,4 +1,4 @@
-"""Tests for the config flow: setup by the user and re-authentication."""
+"""Tests for the config flow: setup, re-authentication and reconfiguration."""
 
 from __future__ import annotations
 
@@ -284,5 +284,135 @@ async def test_reauth_error_shows_the_form_again(
     assert result["type"] == FlowResultType.FORM
     assert result["step_id"] == "reauth_confirm"
     assert result["errors"] == {"base": expected}
+    assert entry.data == ENTRY_DATA
+    setup_entry.assert_not_awaited()
+
+
+async def _submit_reconfigure(
+    hass: HomeAssistant, user_input: dict[str, Any]
+) -> ConfigFlowResult:
+    """Start reconfiguring the entry and submit the given input."""
+    entry = hass.config_entries.async_entries(DOMAIN)[0]
+    result = await entry.start_reconfigure_flow(hass)
+    return await hass.config_entries.flow.async_configure(result["flow_id"], user_input)
+
+
+async def test_reconfigure_shows_the_prefilled_form(hass: HomeAssistant) -> None:
+    """Prefill username and site ID, but not the password."""
+    result = await add_config_entry(hass).start_reconfigure_flow(hass)
+
+    assert result["type"] == FlowResultType.FORM
+    assert result["step_id"] == "reconfigure"
+    assert result["errors"] == {}
+    assert list(result["data_schema"].schema) == list(USER_INPUT)
+    assert result["data_schema"]({}) == {
+        CONF_USERNAME: ENTRY_DATA[CONF_USERNAME],
+        CONF_SITE_ID: ENTRY_DATA[CONF_SITE_ID],
+    }
+
+
+async def test_reconfigure_saves_the_account_and_reloads(
+    hass: HomeAssistant, api: MagicMock, setup_entry: AsyncMock
+) -> None:
+    """Verify the new account against the site, store it and reload."""
+    entry = add_config_entry(hass)
+    user_input = {
+        **USER_INPUT,
+        CONF_USERNAME: "new@example.com",
+        CONF_PASSWORD: "new-password",
+    }
+
+    result = await _submit_reconfigure(hass, user_input)
+    await hass.async_block_till_done()
+
+    assert result["type"] == FlowResultType.ABORT
+    assert result["reason"] == "reconfigure_successful"
+    assert entry.data == {**ENTRY_DATA, **user_input}
+    assert entry.unique_id == f"site_{DEVICE_ID}"
+    assert api.call_args.kwargs[CONF_USERNAME] == "new@example.com"
+    assert api.call_args.kwargs[CONF_PASSWORD] == "new-password"
+    api.return_value.get_devices_info.assert_awaited_once_with("site")
+    setup_entry.assert_awaited_once()
+
+
+async def test_reconfigure_without_password_keeps_the_stored_one(
+    hass: HomeAssistant, api: MagicMock
+) -> None:
+    """Verify and keep the stored password when the field is left empty."""
+    entry = add_config_entry(hass)
+    user_input = {CONF_USERNAME: "new@example.com", CONF_SITE_ID: "site"}
+
+    result = await _submit_reconfigure(hass, user_input)
+
+    assert result["reason"] == "reconfigure_successful"
+    assert entry.data == {**ENTRY_DATA, CONF_USERNAME: "new@example.com"}
+    assert api.call_args.kwargs[CONF_PASSWORD] == ENTRY_DATA[CONF_PASSWORD]
+
+
+@pytest.mark.parametrize(("error", "expected"), ERRORS)
+async def test_reconfigure_error_shows_the_form_again(
+    hass: HomeAssistant,
+    api: MagicMock,
+    setup_entry: AsyncMock,
+    error: type[Exception],
+    expected: str,
+) -> None:
+    """Report the failure, keep the input and save nothing."""
+    entry = add_config_entry(hass)
+    api.return_value.authenticate.side_effect = error
+    user_input = {**USER_INPUT, CONF_USERNAME: "new@example.com"}
+
+    result = await _submit_reconfigure(hass, user_input)
+    await hass.async_block_till_done()
+
+    assert result["type"] == FlowResultType.FORM
+    assert result["step_id"] == "reconfigure"
+    assert result["errors"] == {"base": expected}
+    assert result["data_schema"]({})[CONF_USERNAME] == "new@example.com"
+    assert entry.data == ENTRY_DATA
+    setup_entry.assert_not_awaited()
+
+
+async def test_reconfigure_site_without_devices_shows_the_form_again(
+    hass: HomeAssistant, api: MagicMock
+) -> None:
+    """Report a site without any water heater, like the user flow does."""
+    entry = add_config_entry(hass)
+    api.return_value.get_devices_info.return_value = {}
+
+    result = await _submit_reconfigure(hass, USER_INPUT)
+
+    assert result["type"] == FlowResultType.FORM
+    assert result["errors"] == {"base": "no_devices"}
+    assert entry.data == ENTRY_DATA
+
+
+@pytest.mark.parametrize(
+    ("site_id", "device_id"),
+    [
+        # The site holds another water heater only.
+        ("site", SECOND_DEVICE_ID),
+        # The site holds the water heater, but the unique ID would change.
+        ("other-site", DEVICE_ID),
+    ],
+)
+async def test_reconfigure_other_unique_id_aborts(
+    hass: HomeAssistant,
+    api: MagicMock,
+    setup_entry: AsyncMock,
+    site_id: str,
+    device_id: str,
+) -> None:
+    """Refuse a site that would give the entry another unique ID."""
+    entry = add_config_entry(hass)
+    devices = load_fixture("info.json")
+    devices["devicesByType"]["LOAD_DEVICE"][0]["deviceInfo"]["deviceId"] = device_id
+    api.return_value.get_devices_info.return_value = devices
+
+    result = await _submit_reconfigure(hass, {**USER_INPUT, CONF_SITE_ID: site_id})
+    await hass.async_block_till_done()
+
+    assert result["type"] == FlowResultType.ABORT
+    assert result["reason"] == "unique_id_mismatch"
     assert entry.data == ENTRY_DATA
     setup_entry.assert_not_awaited()
