@@ -15,7 +15,7 @@ A custom Home Assistant integration for controlling and monitoring SolarEdge hot
 
 - A SolarEdge account with access to the monitoring portal
 - A SolarEdge site with a connected hot water controller (Load Device)
-- Home Assistant 2024.1 or newer
+- Home Assistant 2026.3.2 or newer
 
 ## Installation
 
@@ -51,6 +51,12 @@ After setup, you can adjust the polling interval via the integration's **Configu
 | Option | Default | Range |
 |---|---|---|
 | Polling interval (seconds) | 60 | 1 – 3600 |
+
+Intervals below 10 seconds put load on the SolarEdge cloud and may get your
+requests throttled. When you enter such an interval, the integration asks you to
+confirm it before saving; you can save it or go back and choose another value.
+Once a short interval is saved, changing it to another short one needs no new
+confirmation.
 
 A lost request does not blank the entities right away: up to three consecutive
 failed polls keep the last known values, so a brief cloud or network hiccup does

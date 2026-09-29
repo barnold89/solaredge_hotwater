@@ -100,3 +100,6 @@ def test_device_info() -> None:
     assert device_info["name"] == "SolarEdge Heizstab"
     assert device_info["model"] == "SMRT-HOT-WTR-30-S2"
     assert device_info["serial_number"] == "0000000"
+    assert device_info["configuration_url"] == (
+        "https://monitoring.solaredge.com/solaredge-web/p/site/site/dashboard"
+    )

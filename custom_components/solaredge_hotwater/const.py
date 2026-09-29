@@ -15,6 +15,8 @@ TOKEN_PATH = "/oauth2/token"  # noqa: S105
 
 # API
 BASE_URL = "https://monitoring.solaredge.com"
+# Site page in the monitoring portal, linked from the device page in HA
+SITE_PORTAL_PATH = "/solaredge-web/p/site/{site_id}/dashboard"
 DEVICES_LIST_INFO_PATH = "/services/m/so/devices-list/site/{site_id}/info"
 DEVICES_LIST_STATE_PATH = "/services/m/so/devices-list/site/{site_id}/state"
 DEVICE_INFO_PATH = "/services/m/so/load-device/site/{site_id}/device/{device_id}/info"
