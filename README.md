@@ -83,7 +83,7 @@ an outage outlasts them do the entities become unavailable.
 Your Site ID is visible in the URL when you log in to the [SolarEdge monitoring portal](https://monitoring.solaredge.com):
 
 ```
-https://monitoring.solaredge.com/solaredge-web/p/site/<SITE_ID>/dashboard
+https://monitoring.solaredge.com/one#/residential/dashboard?siteId=<SITE_ID>
 ```
 
 ## Contributing
