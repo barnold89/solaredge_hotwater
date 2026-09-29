@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+from typing import Any
 from unittest.mock import MagicMock
+
+import pytest
 
 from custom_components.solaredge_hotwater.binary_sensor import (
     BINARY_SENSOR_DESCRIPTIONS,
@@ -69,7 +72,7 @@ def test_sensor_values() -> None:
         "schedule_type": "EXCESS_PV",
         "rated_power": 3000,
         # The recorded idle state carries no activePowerMeter at all.
-        "active_power": None,
+        "active_power": 0,
         "power_level": 0,
     }
 
@@ -95,3 +98,36 @@ def test_device_info() -> None:
     assert device_info["configuration_url"] == (
         "https://monitoring.solaredge.com/one#/residential/dashboard?siteId=site"
     )
+
+
+def _active_power(state: dict[str, Any]) -> Any:
+    """Return the active power sensor value for a /state response."""
+    coordinator = _coordinator()
+    coordinator.data = make_data(state=state)
+    description = next(d for d in SENSOR_DESCRIPTIONS if d.key == "active_power")
+    return SolarEdgeWarmwaterSensor(coordinator, description).native_value
+
+
+def test_active_power_idle() -> None:
+    """Report 0 W for the recorded idle state without activePowerMeter."""
+    assert _active_power(load_fixture("state.json")) == 0
+
+
+def test_active_power_value() -> None:
+    """Report activePowerMeter while the heating element draws power."""
+    state = load_fixture("state.json")
+    state["measurements"]["activePowerMeter"] = 2100.5
+
+    assert _active_power(state) == 2100.5
+
+
+@pytest.mark.parametrize("status", ["INACTIVE", None])
+def test_active_power_no_connection(status: str | None) -> None:
+    """Report unknown when the cloud has no connection to the device."""
+    state = load_fixture("state.json")
+    # None stands for a response without portiaCommunicationStatus.
+    state.pop("portiaCommunicationStatus")
+    if status is not None:
+        state["portiaCommunicationStatus"] = status
+
+    assert _active_power(state) is None

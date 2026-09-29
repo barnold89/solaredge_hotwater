@@ -37,6 +37,16 @@ class SolarEdgeSensorDescription(SensorEntityDescription):
     value_fn: Callable[[HotWaterData], Any]
 
 
+def _active_power(data: HotWaterData) -> Any:
+    """Return the active power, 0 W while idle and None without a connection."""
+    # The API omits activePowerMeter instead of reporting 0 W. Without a
+    # connection to the device the cloud cannot tell whether it draws power.
+    if data.state.get("portiaCommunicationStatus") != "ACTIVE":
+        return None
+    power = data.measurements.get("activePowerMeter")
+    return 0 if power is None else power
+
+
 SENSOR_DESCRIPTIONS: tuple[SolarEdgeSensorDescription, ...] = (
     SolarEdgeSensorDescription(
         key="temperature",
@@ -77,7 +87,7 @@ SENSOR_DESCRIPTIONS: tuple[SolarEdgeSensorDescription, ...] = (
         device_class=SensorDeviceClass.POWER,
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=0,
-        value_fn=lambda data: data.measurements.get("activePowerMeter"),
+        value_fn=_active_power,
     ),
     SolarEdgeSensorDescription(
         key="power_level",
