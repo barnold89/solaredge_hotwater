@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -21,13 +20,13 @@ def _api(status: int) -> SolarEdgeWarmwaterAPI:
     return api
 
 
-def test_http_500_on_fetch_raises_api_error() -> None:
+async def test_http_500_on_fetch_raises_api_error() -> None:
     """Turn HTTP 500 on /state into ApiError."""
     with pytest.raises(ApiError, match="500"):
-        asyncio.run(_api(500).get_device_state("site", "device"))
+        await _api(500).get_device_state("site", "device")
 
 
-def test_http_500_on_switch_raises_api_error() -> None:
+async def test_http_500_on_switch_raises_api_error() -> None:
     """Turn HTTP 500 on the activation PUT into ApiError."""
     with pytest.raises(ApiError, match="500"):
-        asyncio.run(_api(500).set_activation_state("site", "device", "AUTO"))
+        await _api(500).set_activation_state("site", "device", "AUTO")

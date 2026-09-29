@@ -1,0 +1,12 @@
+{
+    "activationMode": "AUTO",
+    "percentageLevel": 100,
+    "deviceStatus": "ACTIVE",
+    "autoOffReason": null,
+    "scheduleType": "EXCESS_PV",
+    "portiaCommunicationStatus": "ACTIVE",
+    "measurements": {
+        "measuredTemperature": 70.0,
+        "activePowerMeter": 0
+    }
+}

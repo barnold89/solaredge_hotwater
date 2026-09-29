@@ -16,21 +16,12 @@ from custom_components.solaredge_hotwater.sensor import (
 
 from .common import load_fixture, make_data
 
-STATE = {
-    "activationMode": "AUTO",
-    "percentageLevel": 100,
-    "deviceStatus": "ACTIVE",
-    "scheduleType": "EXCESS_PV",
-    "portiaCommunicationStatus": "ACTIVE",
-    "measurements": {"measuredTemperature": 70.0, "activePowerMeter": 0},
-}
-
 
 def _coordinator() -> MagicMock:
-    """Return a mocked coordinator with the recorded /info response."""
+    """Return a mocked coordinator with the recorded /state and /info responses."""
     coordinator = MagicMock()
     coordinator.data = make_data(
-        state=STATE, info=load_fixture("info_with_schedule.json")
+        state=load_fixture("state.json"), info=load_fixture("info_with_schedule.json")
     )
     coordinator.site_id = "site"
     coordinator.device_id = "device"

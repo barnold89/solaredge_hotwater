@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import copy
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
@@ -78,9 +77,9 @@ def coordinator(entry: MagicMock, api: MagicMock) -> SolarEdgeWarmwaterCoordinat
     return SolarEdgeWarmwaterCoordinator(MagicMock(), entry, api)
 
 
-def _update(coordinator: SolarEdgeWarmwaterCoordinator) -> HotWaterData:
+async def _update(coordinator: SolarEdgeWarmwaterCoordinator) -> HotWaterData:
     """Run one update and store the result like DataUpdateCoordinator does."""
-    coordinator.data = asyncio.run(coordinator._async_update_data())
+    coordinator.data = await coordinator._async_update_data()
     return coordinator.data
 
 
@@ -88,14 +87,14 @@ def _update(coordinator: SolarEdgeWarmwaterCoordinator) -> HotWaterData:
 @pytest.mark.parametrize(
     "fixture", ["info_with_schedule.json", "info_smart_saver.json"]
 )
-def test_first_update_fetches_info_and_state(
+async def test_first_update_fetches_info_and_state(
     coordinator: SolarEdgeWarmwaterCoordinator, api: MagicMock, fixture: str
 ) -> None:
     """Fetch /info and /state on the first update and keep schedules as sent."""
     info = load_fixture(fixture)
     api.get_device_info.return_value = info
 
-    data = _update(coordinator)
+    data = await _update(coordinator)
 
     assert data.state == STATE
     assert data.info == info
@@ -105,21 +104,21 @@ def test_first_update_fetches_info_and_state(
     assert data.device["type"] == "LEVEL_CTRL"
 
 
-def test_info_not_fetched_within_interval(
+async def test_info_not_fetched_within_interval(
     coordinator: SolarEdgeWarmwaterCoordinator, api: MagicMock, now: MagicMock
 ) -> None:
     """Fetch only /state until the /info refresh interval has passed."""
-    _update(coordinator)
+    await _update(coordinator)
     now.return_value = START + timedelta(minutes=14, seconds=59)
 
-    data = _update(coordinator)
+    data = await _update(coordinator)
 
     assert api.get_device_info.await_count == 1
     assert api.get_device_state.await_count == 2
     assert data.last_info_update == START
 
 
-def test_excess_pv_change_visible_after_info_refresh(
+async def test_excess_pv_change_visible_after_info_refresh(
     coordinator: SolarEdgeWarmwaterCoordinator, api: MagicMock, now: MagicMock
 ) -> None:
     """Show a changed excessPVEnabled once /info is fetched again."""
@@ -127,7 +126,7 @@ def test_excess_pv_change_visible_after_info_refresh(
         d for d in BINARY_SENSOR_DESCRIPTIONS if d.key == "excess_pv_enabled"
     )
     sensor = SolarEdgeWarmwaterBinarySensor(coordinator, description)
-    _update(coordinator)
+    await _update(coordinator)
     assert sensor.is_on is True
 
     info = copy.deepcopy(api.get_device_info.return_value)
@@ -135,32 +134,32 @@ def test_excess_pv_change_visible_after_info_refresh(
     api.get_device_info.return_value = info
 
     now.return_value = START + timedelta(minutes=1)
-    _update(coordinator)
+    await _update(coordinator)
     assert sensor.is_on is True
 
     now.return_value = START + timedelta(minutes=15)
-    data = _update(coordinator)
+    data = await _update(coordinator)
     assert sensor.is_on is False
     assert data.last_info_update == now.return_value
 
 
-def test_write_requests_info_refresh(
+async def test_write_requests_info_refresh(
     coordinator: SolarEdgeWarmwaterCoordinator, api: MagicMock, now: MagicMock
 ) -> None:
     """Fetch /info on the next update after a write, then return to the interval."""
     coordinator.async_request_refresh = AsyncMock()
-    _update(coordinator)
+    await _update(coordinator)
 
-    asyncio.run(coordinator.async_refresh_after_write())
+    await coordinator.async_refresh_after_write()
     now.return_value = START + timedelta(minutes=1)
-    data = _update(coordinator)
+    data = await _update(coordinator)
 
     coordinator.async_request_refresh.assert_awaited_once()
     assert api.get_device_info.await_count == 2
     assert data.last_info_update == now.return_value
 
     now.return_value = START + timedelta(minutes=2)
-    _update(coordinator)
+    await _update(coordinator)
     assert api.get_device_info.await_count == 2
 
 
@@ -173,19 +172,19 @@ def test_write_requests_info_refresh(
         TimeoutError(),
     ],
 )
-def test_info_error_keeps_previous_info(
+async def test_info_error_keeps_previous_info(
     coordinator: SolarEdgeWarmwaterCoordinator,
     api: MagicMock,
     now: MagicMock,
     error: Exception,
 ) -> None:
     """Keep the previous /info on errors and retry on the next update."""
-    first = _update(coordinator)
+    first = await _update(coordinator)
     api.get_device_info.side_effect = error
     api.get_device_state.return_value = {"activationMode": "MANUAL"}
 
     now.return_value = START + timedelta(minutes=15)
-    data = _update(coordinator)
+    data = await _update(coordinator)
 
     assert data.state == {"activationMode": "MANUAL"}
     assert data.info == first.info
@@ -194,27 +193,27 @@ def test_info_error_keeps_previous_info(
 
     api.get_device_info.side_effect = None
     now.return_value = START + timedelta(minutes=16)
-    data = _update(coordinator)
+    data = await _update(coordinator)
 
     assert api.get_device_info.await_count == 3
     assert data.last_info_update == now.return_value
 
 
-def test_info_error_after_write_is_retried(
+async def test_info_error_after_write_is_retried(
     coordinator: SolarEdgeWarmwaterCoordinator, api: MagicMock, now: MagicMock
 ) -> None:
     """Keep the write's /info request pending until a fetch succeeds."""
     coordinator.async_request_refresh = AsyncMock()
-    _update(coordinator)
-    asyncio.run(coordinator.async_refresh_after_write())
+    await _update(coordinator)
+    await coordinator.async_refresh_after_write()
 
     api.get_device_info.side_effect = ApiError("HTTP 500")
     now.return_value = START + timedelta(minutes=1)
-    _update(coordinator)
+    await _update(coordinator)
 
     api.get_device_info.side_effect = None
     now.return_value = START + timedelta(minutes=2)
-    data = _update(coordinator)
+    data = await _update(coordinator)
 
     assert api.get_device_info.await_count == 3
     assert data.last_info_update == now.return_value
@@ -230,26 +229,26 @@ def test_info_error_after_write_is_retried(
         TimeoutError(),
     ],
 )
-def test_info_error_on_first_update(
+async def test_info_error_on_first_update(
     coordinator: SolarEdgeWarmwaterCoordinator, api: MagicMock, error: Exception
 ) -> None:
     """Fail the first update when /info cannot be fetched."""
     api.get_device_info.side_effect = error
 
     with pytest.raises(UpdateFailed):
-        _update(coordinator)
+        await _update(coordinator)
 
 
-def test_info_authentication_error_starts_reauth(
+async def test_info_authentication_error_starts_reauth(
     coordinator: SolarEdgeWarmwaterCoordinator, api: MagicMock, now: MagicMock
 ) -> None:
     """Start reauth when /info rejects the credentials, even with previous data."""
-    _update(coordinator)
+    await _update(coordinator)
     api.get_device_info.side_effect = AuthenticationError
     now.return_value = START + timedelta(minutes=15)
 
     with pytest.raises(ConfigEntryAuthFailed):
-        _update(coordinator)
+        await _update(coordinator)
 
 
 @pytest.mark.usefixtures("now")
@@ -262,14 +261,14 @@ def test_info_authentication_error_starts_reauth(
         TimeoutError(),
     ],
 )
-def test_state_error_skips_info(
+async def test_state_error_skips_info(
     coordinator: SolarEdgeWarmwaterCoordinator, api: MagicMock, error: Exception
 ) -> None:
     """Fail the update and skip /info when /state could not be fetched."""
     api.get_device_state.side_effect = error
 
     with pytest.raises(UpdateFailed):
-        _update(coordinator)
+        await _update(coordinator)
 
     api.get_device_info.assert_not_awaited()
 
@@ -284,62 +283,62 @@ def test_state_error_skips_info(
         TimeoutError(),
     ],
 )
-def test_state_error_keeps_previous_data(
+async def test_state_error_keeps_previous_data(
     coordinator: SolarEdgeWarmwaterCoordinator, api: MagicMock, error: Exception
 ) -> None:
     """Return the previous data instead of failing while a short outage lasts."""
-    first = _update(coordinator)
+    first = await _update(coordinator)
     api.get_device_state.side_effect = error
 
     for _ in range(TOLERATED_STATE_FAILURES):
-        assert _update(coordinator) is first
+        assert await _update(coordinator) is first
 
     api.get_device_info.assert_awaited_once()
 
 
 @pytest.mark.usefixtures("now")
-def test_state_error_fails_after_tolerated_failures(
+async def test_state_error_fails_after_tolerated_failures(
     coordinator: SolarEdgeWarmwaterCoordinator, api: MagicMock
 ) -> None:
     """Fail the update once the outage outlasts the tolerated failures."""
-    _update(coordinator)
+    await _update(coordinator)
     api.get_device_state.side_effect = ApiError("HTTP 500")
     for _ in range(TOLERATED_STATE_FAILURES):
-        _update(coordinator)
+        await _update(coordinator)
 
     with pytest.raises(UpdateFailed):
-        _update(coordinator)
+        await _update(coordinator)
 
 
 @pytest.mark.usefixtures("now")
-def test_state_error_tolerance_resets_after_success(
+async def test_state_error_tolerance_resets_after_success(
     coordinator: SolarEdgeWarmwaterCoordinator, api: MagicMock
 ) -> None:
     """Count the failures of the next outage from zero again."""
-    _update(coordinator)
+    await _update(coordinator)
     api.get_device_state.side_effect = ApiError("HTTP 500")
     for _ in range(TOLERATED_STATE_FAILURES):
-        _update(coordinator)
+        await _update(coordinator)
 
     api.get_device_state.side_effect = None
-    _update(coordinator)
+    await _update(coordinator)
 
     api.get_device_state.side_effect = ApiError("HTTP 500")
     for _ in range(TOLERATED_STATE_FAILURES):
-        data = _update(coordinator)
+        data = await _update(coordinator)
 
     assert data.state == STATE
 
 
 @pytest.mark.usefixtures("now")
-def test_state_authentication_error_starts_reauth(
+async def test_state_authentication_error_starts_reauth(
     coordinator: SolarEdgeWarmwaterCoordinator, api: MagicMock
 ) -> None:
     """Start reauth when /state rejects the credentials."""
     api.get_device_state.side_effect = AuthenticationError
 
     with pytest.raises(ConfigEntryAuthFailed):
-        _update(coordinator)
+        await _update(coordinator)
 
 
 @pytest.fixture
@@ -352,11 +351,11 @@ def writable(
     return coordinator
 
 
-def test_set_activation_state_refreshes(
+async def test_set_activation_state_refreshes(
     writable: SolarEdgeWarmwaterCoordinator, api: MagicMock
 ) -> None:
     """Send the write for the configured device and refresh afterwards."""
-    asyncio.run(writable.async_set_activation_state("MANUAL", level=100))
+    await writable.async_set_activation_state("MANUAL", level=100)
 
     api.set_activation_state.assert_awaited_once_with(
         "site", "device", "MANUAL", level=100
@@ -374,14 +373,14 @@ def test_set_activation_state_refreshes(
         TimeoutError(),
     ],
 )
-def test_set_activation_state_error(
+async def test_set_activation_state_error(
     writable: SolarEdgeWarmwaterCoordinator, api: MagicMock, error: Exception
 ) -> None:
     """Raise a translated error and skip the refresh when the write fails."""
     api.set_activation_state.side_effect = error
 
     with pytest.raises(HomeAssistantError) as exc_info:
-        asyncio.run(writable.async_set_activation_state("AUTO"))
+        await writable.async_set_activation_state("AUTO")
 
     assert exc_info.value.translation_domain == DOMAIN
     assert exc_info.value.translation_key == "set_state_failed"
@@ -390,14 +389,14 @@ def test_set_activation_state_error(
     writable.config_entry.async_start_reauth.assert_not_called()
 
 
-def test_set_activation_state_authentication_error_starts_reauth(
+async def test_set_activation_state_authentication_error_starts_reauth(
     writable: SolarEdgeWarmwaterCoordinator, api: MagicMock
 ) -> None:
     """Start reauth and raise a translated error when the write is rejected."""
     api.set_activation_state.side_effect = AuthenticationError
 
     with pytest.raises(HomeAssistantError) as exc_info:
-        asyncio.run(writable.async_set_activation_state("AUTO"))
+        await writable.async_set_activation_state("AUTO")
 
     assert exc_info.value.translation_domain == DOMAIN
     assert exc_info.value.translation_key == "auth_failed"

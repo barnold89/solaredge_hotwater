@@ -1,14 +1,14 @@
-"""Tests for the re-authentication flow."""
+"""Tests for the config flow: setup by the user and re-authentication."""
 
 from __future__ import annotations
 
-import asyncio
-from typing import TYPE_CHECKING
+import copy
+from typing import TYPE_CHECKING, Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import aiohttp
 import pytest
-from homeassistant.config_entries import SOURCE_REAUTH
+from homeassistant.config_entries import SOURCE_USER
 from homeassistant.const import CONF_PASSWORD, CONF_USERNAME
 from homeassistant.data_entry_flow import FlowResultType
 
@@ -16,131 +16,273 @@ from custom_components.solaredge_hotwater.api import (
     AuthenticationError,
     LoginUnavailableError,
 )
-from custom_components.solaredge_hotwater.config_flow import (
-    SolarEdgeWarmwaterConfigFlow,
-)
 from custom_components.solaredge_hotwater.const import (
     CONF_DEVICE_ID,
     CONF_SITE_ID,
     DOMAIN,
 )
 
-from .common import ENTRY_ID, mock_hass
+from .common import (
+    DEVICE_ID,
+    DEVICE_NAME,
+    ENTRY_DATA,
+    add_config_entry,
+    load_fixture,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
     from homeassistant.config_entries import ConfigFlowResult
+    from homeassistant.core import HomeAssistant
 
-ENTRY_DATA = {
-    CONF_USERNAME: "user@example.com",
-    CONF_PASSWORD: "old-password",
-    CONF_SITE_ID: "site",
-    CONF_DEVICE_ID: "device",
+USER_INPUT = {
+    CONF_USERNAME: ENTRY_DATA[CONF_USERNAME],
+    CONF_PASSWORD: ENTRY_DATA[CONF_PASSWORD],
+    CONF_SITE_ID: ENTRY_DATA[CONF_SITE_ID],
 }
 
+SECOND_DEVICE_ID = "111111"
+SECOND_DEVICE_NAME = "Zweiter Heizstab"
 
-@pytest.fixture
-def entry() -> MagicMock:
-    """Return the config entry that is being re-authenticated."""
-    entry = MagicMock()
-    entry.data = dict(ENTRY_DATA)
-    entry.entry_id = ENTRY_ID
-    return entry
+ERRORS = [
+    (AuthenticationError, "invalid_auth"),
+    (LoginUnavailableError, "cannot_connect"),
+    (aiohttp.ClientError, "cannot_connect"),
+    (TimeoutError, "cannot_connect"),
+    (RuntimeError, "unknown"),
+]
 
 
-@pytest.fixture
-def flow(entry: MagicMock) -> SolarEdgeWarmwaterConfigFlow:
-    """Return a config flow in a reauth context for that entry."""
-    flow = SolarEdgeWarmwaterConfigFlow()
-    flow.hass = mock_hass(entry)
-    flow.handler = DOMAIN
-    flow.context = {"source": SOURCE_REAUTH, "entry_id": ENTRY_ID}
-    return flow
+@pytest.fixture(autouse=True)
+def setup_entry() -> Iterator[AsyncMock]:
+    """Keep created and reloaded entries from setting up the integration."""
+    with patch(
+        "custom_components.solaredge_hotwater.async_setup_entry", return_value=True
+    ) as setup_entry:
+        yield setup_entry
 
 
 @pytest.fixture
 def api() -> Iterator[MagicMock]:
-    """Patch the API client and the session it is handed, and return the client."""
-    with (
-        patch(
-            "custom_components.solaredge_hotwater.config_flow.async_get_clientsession"
-        ),
-        patch(
-            "custom_components.solaredge_hotwater.config_flow.SolarEdgeWarmwaterAPI"
-        ) as client,
-    ):
+    """Patch the API client to answer with the recorded devices list."""
+    with patch(
+        "custom_components.solaredge_hotwater.config_flow.SolarEdgeWarmwaterAPI"
+    ) as client:
         client.return_value.authenticate = AsyncMock(return_value=True)
+        client.return_value.get_devices_info = AsyncMock(
+            return_value=load_fixture("info.json")
+        )
         yield client
 
 
-def _confirm(flow: SolarEdgeWarmwaterConfigFlow, password: str) -> ConfigFlowResult:
-    """Submit the reauth form with the given password."""
-    return asyncio.run(flow.async_step_reauth_confirm({CONF_PASSWORD: password}))
+def _two_devices() -> dict[str, Any]:
+    """Return the recorded devices list with a second water heater."""
+    devices = load_fixture("info.json")
+    load_devices = devices["devicesByType"]["LOAD_DEVICE"]
+    second = copy.deepcopy(load_devices[0])
+    second["deviceInfo"]["deviceId"] = SECOND_DEVICE_ID
+    second["deviceInfo"]["name"] = SECOND_DEVICE_NAME
+    load_devices.append(second)
+    return devices
 
 
-def test_reauth_shows_the_password_form(flow: SolarEdgeWarmwaterConfigFlow) -> None:
-    """Start reauth the way Home Assistant does, with the entry data."""
-    result = asyncio.run(flow.async_step_reauth(ENTRY_DATA))
+async def _submit_user(hass: HomeAssistant) -> ConfigFlowResult:
+    """Start the user flow and submit the credentials."""
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": SOURCE_USER}
+    )
+    return await hass.config_entries.flow.async_configure(result["flow_id"], USER_INPUT)
+
+
+async def test_user_shows_the_form(hass: HomeAssistant) -> None:
+    """Ask for username, password and site ID."""
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": SOURCE_USER}
+    )
+
+    assert result["type"] == FlowResultType.FORM
+    assert result["step_id"] == "user"
+    assert result["errors"] == {}
+    assert list(result["data_schema"].schema) == list(USER_INPUT)
+
+
+async def test_single_device_creates_the_entry(
+    hass: HomeAssistant, api: MagicMock
+) -> None:
+    """Create the entry for the only water heater of the site."""
+    result = await _submit_user(hass)
+
+    assert result["type"] == FlowResultType.CREATE_ENTRY
+    assert result["title"] == DEVICE_NAME
+    assert result["data"] == ENTRY_DATA
+    assert result["result"].unique_id == f"site_{DEVICE_ID}"
+    assert api.call_args.kwargs[CONF_USERNAME] == USER_INPUT[CONF_USERNAME]
+    assert api.call_args.kwargs[CONF_PASSWORD] == USER_INPUT[CONF_PASSWORD]
+    api.return_value.get_devices_info.assert_awaited_once_with("site")
+
+
+@pytest.mark.parametrize(("error", "expected"), ERRORS)
+async def test_user_error_shows_the_form_again(
+    hass: HomeAssistant, api: MagicMock, error: type[Exception], expected: str
+) -> None:
+    """Report the failure, then create the entry once the login works."""
+    api.return_value.authenticate.side_effect = error
+
+    result = await _submit_user(hass)
+
+    assert result["type"] == FlowResultType.FORM
+    assert result["step_id"] == "user"
+    assert result["errors"] == {"base": expected}
+
+    api.return_value.authenticate.side_effect = None
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], USER_INPUT
+    )
+
+    assert result["type"] == FlowResultType.CREATE_ENTRY
+
+
+@pytest.mark.parametrize(
+    "devices",
+    [
+        {},
+        {"devicesByType": {}},
+        {"devicesByType": {"LOAD_DEVICE": []}},
+        {"devicesByType": {"LOAD_DEVICE": [{"deviceInfo": {"name": "No ID"}}]}},
+    ],
+)
+async def test_no_devices_shows_the_form_again(
+    hass: HomeAssistant, api: MagicMock, devices: dict[str, Any]
+) -> None:
+    """Report a site without a water heater that has a device ID."""
+    api.return_value.get_devices_info.return_value = devices
+
+    result = await _submit_user(hass)
+
+    assert result["type"] == FlowResultType.FORM
+    assert result["step_id"] == "user"
+    assert result["errors"] == {"base": "no_devices"}
+
+
+async def test_multiple_devices_ask_which_one(
+    hass: HomeAssistant, api: MagicMock
+) -> None:
+    """Let the user pick a water heater and create the entry for it."""
+    api.return_value.get_devices_info.return_value = _two_devices()
+
+    result = await _submit_user(hass)
+
+    assert result["type"] == FlowResultType.FORM
+    assert result["step_id"] == "select_device"
+    schema = result["data_schema"]
+    assert schema.schema[CONF_DEVICE_ID].container == {
+        DEVICE_ID: DEVICE_NAME,
+        SECOND_DEVICE_ID: SECOND_DEVICE_NAME,
+    }
+
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {CONF_DEVICE_ID: SECOND_DEVICE_ID}
+    )
+
+    assert result["type"] == FlowResultType.CREATE_ENTRY
+    assert result["title"] == SECOND_DEVICE_NAME
+    assert result["data"] == {**ENTRY_DATA, CONF_DEVICE_ID: SECOND_DEVICE_ID}
+    assert result["result"].unique_id == f"site_{SECOND_DEVICE_ID}"
+
+
+@pytest.mark.usefixtures("api")
+async def test_single_device_already_configured(hass: HomeAssistant) -> None:
+    """Abort when the only water heater of the site is already set up."""
+    add_config_entry(hass)
+
+    result = await _submit_user(hass)
+
+    assert result["type"] == FlowResultType.ABORT
+    assert result["reason"] == "already_configured"
+
+
+async def test_selected_device_already_configured(
+    hass: HomeAssistant, api: MagicMock
+) -> None:
+    """Abort when the selected water heater is already set up."""
+    add_config_entry(hass)
+    api.return_value.get_devices_info.return_value = _two_devices()
+    result = await _submit_user(hass)
+
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {CONF_DEVICE_ID: DEVICE_ID}
+    )
+
+    assert result["type"] == FlowResultType.ABORT
+    assert result["reason"] == "already_configured"
+
+
+async def test_reauth_shows_the_password_form(hass: HomeAssistant) -> None:
+    """Ask only for the password of the configured account."""
+    result = await add_config_entry(hass).start_reauth_flow(hass)
 
     assert result["type"] == FlowResultType.FORM
     assert result["step_id"] == "reauth_confirm"
-    schema = result["data_schema"]
-    assert list(schema.schema) == [CONF_PASSWORD]
+    assert list(result["data_schema"].schema) == [CONF_PASSWORD]
     assert (
         result["description_placeholders"][CONF_USERNAME] == ENTRY_DATA[CONF_USERNAME]
     )
 
 
-def test_reauth_uses_the_configured_username(
-    flow: SolarEdgeWarmwaterConfigFlow, api: MagicMock
+async def _confirm_reauth(hass: HomeAssistant, password: str) -> ConfigFlowResult:
+    """Start reauth for the entry and submit the given password."""
+    result = await hass.config_entries.async_entries(DOMAIN)[0].start_reauth_flow(hass)
+    return await hass.config_entries.flow.async_configure(
+        result["flow_id"], {CONF_PASSWORD: password}
+    )
+
+
+async def test_reauth_uses_the_configured_username(
+    hass: HomeAssistant, api: MagicMock
 ) -> None:
     """Verify the new password against the account stored in the entry."""
-    _confirm(flow, "new-password")
+    add_config_entry(hass)
+
+    await _confirm_reauth(hass, "new-password")
 
     assert api.call_args.kwargs[CONF_USERNAME] == ENTRY_DATA[CONF_USERNAME]
     assert api.call_args.kwargs[CONF_PASSWORD] == "new-password"
 
 
 @pytest.mark.usefixtures("api")
-def test_reauth_saves_the_password_and_reloads(
-    flow: SolarEdgeWarmwaterConfigFlow, entry: MagicMock
+async def test_reauth_saves_the_password_and_reloads(
+    hass: HomeAssistant, setup_entry: AsyncMock
 ) -> None:
     """Store only the password and let Home Assistant reload the entry."""
-    result = _confirm(flow, "new-password")
+    entry = add_config_entry(hass)
+
+    result = await _confirm_reauth(hass, "new-password")
+    await hass.async_block_till_done()
 
     assert result["type"] == FlowResultType.ABORT
     assert result["reason"] == "reauth_successful"
-    config_entries = flow.hass.config_entries
-    assert config_entries.async_update_entry.call_args.kwargs["data"] == {
-        **ENTRY_DATA,
-        CONF_PASSWORD: "new-password",
-    }
-    config_entries.async_schedule_reload.assert_called_once_with(entry.entry_id)
+    assert entry.data == {**ENTRY_DATA, CONF_PASSWORD: "new-password"}
+    setup_entry.assert_awaited_once()
 
 
-@pytest.mark.parametrize(
-    ("error", "expected"),
-    [
-        (AuthenticationError, "invalid_auth"),
-        (LoginUnavailableError, "cannot_connect"),
-        (aiohttp.ClientError, "cannot_connect"),
-        (TimeoutError, "cannot_connect"),
-        (RuntimeError, "unknown"),
-    ],
-)
-def test_reauth_error_shows_the_form_again(
-    flow: SolarEdgeWarmwaterConfigFlow,
+@pytest.mark.parametrize(("error", "expected"), ERRORS)
+async def test_reauth_error_shows_the_form_again(
+    hass: HomeAssistant,
     api: MagicMock,
+    setup_entry: AsyncMock,
     error: type[Exception],
     expected: str,
 ) -> None:
     """Report the failure and save nothing."""
-    api.return_value.authenticate = AsyncMock(side_effect=error)
+    entry = add_config_entry(hass)
+    api.return_value.authenticate.side_effect = error
 
-    result = _confirm(flow, "new-password")
+    result = await _confirm_reauth(hass, "new-password")
+    await hass.async_block_till_done()
 
     assert result["type"] == FlowResultType.FORM
     assert result["step_id"] == "reauth_confirm"
     assert result["errors"] == {"base": expected}
-    flow.hass.config_entries.async_update_entry.assert_not_called()
+    assert entry.data == ENTRY_DATA
+    setup_entry.assert_not_awaited()

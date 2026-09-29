@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
@@ -51,14 +50,14 @@ def test_current_option(data: dict[str, Any], expected: str) -> None:
         (MODE_OFF, ("MANUAL",), {"level": 0}),
     ],
 )
-def test_select_option_switches_through_coordinator(
+async def test_select_option_switches_through_coordinator(
     option: str, args: tuple[str, ...], kwargs: dict[str, int]
 ) -> None:
     """Switch the mode through the coordinator, which handles errors and refresh."""
     entity = _entity({})
     entity.coordinator.async_set_activation_state = AsyncMock()
 
-    asyncio.run(entity.async_select_option(option))
+    await entity.async_select_option(option)
 
     entity.coordinator.async_set_activation_state.assert_awaited_once_with(
         *args, **kwargs

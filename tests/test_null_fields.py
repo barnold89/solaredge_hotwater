@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
@@ -31,7 +30,7 @@ def _sensor(key: str, data: HotWaterData) -> SolarEdgeWarmwaterSensor:
     return SolarEdgeWarmwaterSensor(coordinator, description)
 
 
-def _update(info: dict[str, Any] | None) -> HotWaterData:
+async def _update(info: dict[str, Any] | None) -> HotWaterData:
     """Run one coordinator update with the given /info response."""
     api = MagicMock()
     api.get_device_info = AsyncMock(return_value=info)
@@ -41,7 +40,7 @@ def _update(info: dict[str, Any] | None) -> HotWaterData:
     entry.options = {}
     coordinator = SolarEdgeWarmwaterCoordinator(MagicMock(), entry, api)
 
-    return asyncio.run(coordinator._async_update_data())
+    return await coordinator._async_update_data()
 
 
 def test_sensor_measurements_null() -> None:
@@ -60,9 +59,9 @@ def test_device_info_null() -> None:
     assert device_info["manufacturer"] == "SolarEdge"
 
 
-def test_device_configurations_null() -> None:
+async def test_device_configurations_null() -> None:
     """Return the state and no rated power when deviceConfigurations is null."""
-    data = _update({"deviceConfigurations": None})
+    data = await _update({"deviceConfigurations": None})
 
     assert data.state["activationMode"] == "AUTO"
     assert data.configurations == {}
@@ -79,6 +78,6 @@ def test_device_configurations_null() -> None:
         {"schedules": {"allSchedules": None}},
     ],
 )
-def test_schedules_null(info: dict[str, Any] | None) -> None:
+async def test_schedules_null(info: dict[str, Any] | None) -> None:
     """Return no schedules when /info or its schedule fields are null."""
-    assert _update(info).schedules == []
+    assert (await _update(info)).schedules == []
