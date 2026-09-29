@@ -60,6 +60,41 @@ class SolarEdgeWarmwaterConfigFlow(ConfigFlow, domain=DOMAIN):
         self._site_id: str = ""
         self._devices: list[dict] = []
 
+    async def _async_validate(
+        self, username: str, password: str, site_id: str | None = None
+    ) -> str | None:
+        """
+        Log in and, given a site ID, fetch the water heaters of that site.
+
+        Store the devices that carry a device ID in self._devices and return
+        the error key for the form, or None on success.
+        """
+        api = SolarEdgeWarmwaterAPI(
+            username=username,
+            password=password,
+            session=async_get_clientsession(self.hass),
+        )
+
+        try:
+            await api.authenticate()
+            if site_id is None:
+                return None
+            devices_data = await api.get_devices_info(site_id)
+        except AuthenticationError:
+            return "invalid_auth"
+        except LoginUnavailableError, aiohttp.ClientError, TimeoutError:
+            return "cannot_connect"
+        except Exception:
+            _LOGGER.exception("Unexpected error while validating the credentials")
+            return "unknown"
+
+        # Extract LOAD_DEVICE entries
+        load_devices = devices_data.get("devicesByType", {}).get("LOAD_DEVICE", [])
+        self._devices = [
+            d for d in load_devices if d.get("deviceInfo", {}).get("deviceId")
+        ]
+        return None
+
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
@@ -71,49 +106,29 @@ class SolarEdgeWarmwaterConfigFlow(ConfigFlow, domain=DOMAIN):
             self._password = user_input[CONF_PASSWORD]
             self._site_id = user_input[CONF_SITE_ID]
 
-            api = SolarEdgeWarmwaterAPI(
-                username=self._username,
-                password=self._password,
-                session=async_get_clientsession(self.hass),
+            error = await self._async_validate(
+                self._username, self._password, self._site_id
             )
-
-            try:
-                await api.authenticate()
-                devices_data = await api.get_devices_info(self._site_id)
-            except AuthenticationError:
-                errors["base"] = "invalid_auth"
-            except LoginUnavailableError, aiohttp.ClientError, TimeoutError:
-                errors["base"] = "cannot_connect"
-            except Exception:
-                _LOGGER.exception("Unexpected error during setup")
-                errors["base"] = "unknown"
-            else:
-                # Extract LOAD_DEVICE entries
-                load_devices = devices_data.get("devicesByType", {}).get(
-                    "LOAD_DEVICE", []
+            if error:
+                errors["base"] = error
+            elif not self._devices:
+                errors["base"] = "no_devices"
+            elif len(self._devices) == 1:
+                device = self._devices[0]
+                device_id = device["deviceInfo"]["deviceId"]
+                await self.async_set_unique_id(f"{self._site_id}_{device_id}")
+                self._abort_if_unique_id_configured()
+                return self.async_create_entry(
+                    title=device["deviceInfo"].get("name", "SolarEdge Warmwater"),
+                    data={
+                        CONF_USERNAME: self._username,
+                        CONF_PASSWORD: self._password,
+                        CONF_SITE_ID: self._site_id,
+                        CONF_DEVICE_ID: device_id,
+                    },
                 )
-                self._devices = [
-                    d for d in load_devices if d.get("deviceInfo", {}).get("deviceId")
-                ]
-
-                if not self._devices:
-                    errors["base"] = "no_devices"
-                elif len(self._devices) == 1:
-                    device = self._devices[0]
-                    device_id = device["deviceInfo"]["deviceId"]
-                    await self.async_set_unique_id(f"{self._site_id}_{device_id}")
-                    self._abort_if_unique_id_configured()
-                    return self.async_create_entry(
-                        title=device["deviceInfo"].get("name", "SolarEdge Warmwater"),
-                        data={
-                            CONF_USERNAME: self._username,
-                            CONF_PASSWORD: self._password,
-                            CONF_SITE_ID: self._site_id,
-                            CONF_DEVICE_ID: device_id,
-                        },
-                    )
-                else:
-                    return await self.async_step_select_device()
+            else:
+                return await self.async_step_select_device()
 
         return self.async_show_form(
             step_id="user",
@@ -183,21 +198,9 @@ class SolarEdgeWarmwaterConfigFlow(ConfigFlow, domain=DOMAIN):
         errors: dict[str, str] = {}
 
         if user_input is not None:
-            api = SolarEdgeWarmwaterAPI(
-                username=username,
-                password=user_input[CONF_PASSWORD],
-                session=async_get_clientsession(self.hass),
-            )
-
-            try:
-                await api.authenticate()
-            except AuthenticationError:
-                errors["base"] = "invalid_auth"
-            except LoginUnavailableError, aiohttp.ClientError, TimeoutError:
-                errors["base"] = "cannot_connect"
-            except Exception:
-                _LOGGER.exception("Unexpected error during re-auth")
-                errors["base"] = "unknown"
+            error = await self._async_validate(username, user_input[CONF_PASSWORD])
+            if error:
+                errors["base"] = error
             else:
                 return self.async_update_reload_and_abort(
                     entry, data_updates={CONF_PASSWORD: user_input[CONF_PASSWORD]}
@@ -207,6 +210,60 @@ class SolarEdgeWarmwaterConfigFlow(ConfigFlow, domain=DOMAIN):
             step_id="reauth_confirm",
             data_schema=vol.Schema({vol.Required(CONF_PASSWORD): str}),
             description_placeholders={CONF_USERNAME: username},
+            errors=errors,
+        )
+
+    async def async_step_reconfigure(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """
+        Change the account, password or site ID of the configured entry.
+
+        The password field starts empty; left empty, the stored password is
+        kept. The site must still hold the entry's water heater and the unique
+        ID `{site_id}_{device_id}` must not change, otherwise the flow aborts.
+        """
+        entry = self._get_reconfigure_entry()
+        errors: dict[str, str] = {}
+
+        if user_input is not None:
+            username = user_input[CONF_USERNAME]
+            password = user_input.get(CONF_PASSWORD) or entry.data[CONF_PASSWORD]
+            site_id = user_input[CONF_SITE_ID]
+
+            error = await self._async_validate(username, password, site_id)
+            if error:
+                errors["base"] = error
+            elif not self._devices:
+                errors["base"] = "no_devices"
+            else:
+                device_id = entry.data[CONF_DEVICE_ID]
+                if any(d["deviceInfo"]["deviceId"] == device_id for d in self._devices):
+                    await self.async_set_unique_id(f"{site_id}_{device_id}")
+                else:
+                    # The site lacks this water heater; switching to another
+                    # device would change the unique ID.
+                    await self.async_set_unique_id(None)
+                self._abort_if_unique_id_mismatch()
+                return self.async_update_reload_and_abort(
+                    entry,
+                    data_updates={
+                        CONF_USERNAME: username,
+                        CONF_PASSWORD: password,
+                        CONF_SITE_ID: site_id,
+                    },
+                )
+
+        defaults = user_input or entry.data
+        return self.async_show_form(
+            step_id="reconfigure",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(CONF_USERNAME, default=defaults[CONF_USERNAME]): str,
+                    vol.Optional(CONF_PASSWORD): str,
+                    vol.Required(CONF_SITE_ID, default=defaults[CONF_SITE_ID]): str,
+                }
+            ),
             errors=errors,
         )
 

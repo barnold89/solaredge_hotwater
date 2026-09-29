@@ -67,6 +67,18 @@
                 "data": {
                     "password": "Password"
                 }
+            },
+            "reconfigure": {
+                "title": "Reconfigure",
+                "description": "Change the SolarEdge account this water heater is read with. The site must still contain this water heater; the history is kept.",
+                "data": {
+                    "username": "Username",
+                    "password": "Password",
+                    "site_id": "Site ID"
+                },
+                "data_description": {
+                    "password": "Leave empty to keep the stored password."
+                }
             }
         },
         "error": {
@@ -77,7 +89,9 @@
         },
         "abort": {
             "already_configured": "This entry is already configured.",
-            "reauth_successful": "Re-authentication was successful."
+            "reauth_successful": "Re-authentication was successful.",
+            "reconfigure_successful": "Reconfiguration was successful.",
+            "unique_id_mismatch": "This site does not contain the configured water heater. Reconfiguring cannot switch to another site or device; set up the integration again for that."
         }
     },
     "exceptions": {

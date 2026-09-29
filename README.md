@@ -44,6 +44,15 @@ A custom Home Assistant integration for controlling and monitoring SolarEdge hot
 
 The integration will automatically discover your hot water controller and create all entities.
 
+### Reconfigure
+
+To move the water heater to another SolarEdge account, choose **Reconfigure**
+from the integration's menu. Username and Site ID are prefilled; leave the
+password empty to keep the stored one. The new login is checked against the
+site before anything is saved, and the entities keep their history. The site
+must still contain the configured water heater: switching to another site or
+device is refused and needs a new setup.
+
 ### Options
 
 After setup, you can adjust the polling interval via the integration's **Configure** button:
