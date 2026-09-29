@@ -1,0 +1,11 @@
+{
+    "deviceStatus": "ACTIVE",
+    "activationMode": "AUTO",
+    "percentageLevel": 0,
+    "autoOffReason": "PENDING_EXCESS_SOLAR",
+    "scheduleType": "EXCESS_PV",
+    "measurements": {
+        "measuredTemperature": 67.60212
+    },
+    "portiaCommunicationStatus": "ACTIVE"
+}

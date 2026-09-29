@@ -16,21 +16,12 @@ from custom_components.solaredge_hotwater.sensor import (
 
 from .common import load_fixture, make_data
 
-STATE = {
-    "activationMode": "AUTO",
-    "percentageLevel": 100,
-    "deviceStatus": "ACTIVE",
-    "scheduleType": "EXCESS_PV",
-    "portiaCommunicationStatus": "ACTIVE",
-    "measurements": {"measuredTemperature": 70.0, "activePowerMeter": 0},
-}
-
 
 def _coordinator() -> MagicMock:
-    """Return a mocked coordinator with the recorded /info response."""
+    """Return a mocked coordinator with the recorded /state and /info responses."""
     coordinator = MagicMock()
     coordinator.data = make_data(
-        state=STATE, info=load_fixture("info_with_schedule.json")
+        state=load_fixture("state.json"), info=load_fixture("info_with_schedule.json")
     )
     coordinator.site_id = "site"
     coordinator.device_id = "device"
@@ -72,13 +63,14 @@ def test_sensor_values() -> None:
     }
 
     assert values == {
-        "temperature": 70.0,
+        "temperature": 67.60212,
         "device_status": "ACTIVE",
-        "auto_off_reason": None,
+        "auto_off_reason": "PENDING_EXCESS_SOLAR",
         "schedule_type": "EXCESS_PV",
         "rated_power": 3000,
-        "active_power": 0,
-        "power_level": 100,
+        # The recorded idle state carries no activePowerMeter at all.
+        "active_power": None,
+        "power_level": 0,
     }
 
 

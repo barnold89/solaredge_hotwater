@@ -1,0 +1,27 @@
+{
+    "devicesByType": {
+        "LOAD_DEVICE": [
+            {
+                "portiaCommunicationStatus": "ACTIVE",
+                "deviceInfo": {
+                    "deviceId": "000000",
+                    "name": "SolarEdge Heizstab",
+                    "serialNumber": "0000000",
+                    "type": "LEVEL_CTRL"
+                },
+                "deviceConfigurations": {
+                    "iconName": "GENERIC",
+                    "ratedPower": 3000.0,
+                    "excessPVEnabled": "ON"
+                },
+                "schedules": {
+                    "atLeastOneScheduler": false
+                },
+                "scenarioSupported": false
+            }
+        ],
+        "EV_CHARGER": [],
+        "HEAT_PUMP": [],
+        "HEAT_PUMP_SG_READY": []
+    }
+}

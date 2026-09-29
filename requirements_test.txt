@@ -1,0 +1,4 @@
+-r requirements.txt
+# Pins pytest and Home Assistant itself: bump together with homeassistant
+# in requirements.txt, using the release that pins the same version.
+pytest-homeassistant-custom-component==0.13.318
